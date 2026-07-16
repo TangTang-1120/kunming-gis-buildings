@@ -560,6 +560,7 @@
       <p>按用途分类你的常用站点。搜索、筛选、一点即开。</p>
       <div class="banner-actions">
         <a class="primary" href="#q">开始搜索</a>
+        <a class="ghost" href="#main-grid">主要使用</a>
         <a class="ghost" href="#gis">查看进行中的 GIS</a>
       </div>
     </div>
@@ -597,6 +598,7 @@
 
     <nav class="tabs" id="tabs" aria-label="分类筛选">
       <button class="tab active" type="button" data-cat="all">全部<span class="n"></span></button>
+      <button class="tab" type="button" data-cat="main">主要使用<span class="n"></span></button>
       <button class="tab" type="button" data-cat="fav">书签栏<span class="n"></span></button>
       <button class="tab" type="button" data-cat="search">搜索<span class="n"></span></button>
       <button class="tab" type="button" data-cat="model">模型<span class="n"></span></button>
@@ -607,11 +609,16 @@
     </nav>
 
     <div class="hint">
-      <span>「书签栏」来自你的常用站点 · 点击卡片直接打开</span>
+      <span>「主要使用」一键跳转你的高频创作工具</span>
       <span><kbd>/</kbd> 聚焦搜索</span>
     </div>
 
     <div id="catalog">
+      <section class="group" data-cat="main">
+        <div class="group-title"><span>主要使用</span></div>
+        <div class="grid" id="main-grid"></div>
+      </section>
+
       <section class="group" data-cat="fav">
         <div class="group-title"><span>书签栏常用</span></div>
         <div class="grid" id="fav-grid"></div>
@@ -824,7 +831,38 @@
 
   <script>
     (function () {
-      // 书签栏截图识别出的常用站点（按从左到右）
+      function renderCards(gridId, list, cat) {
+        const grid = document.getElementById(gridId);
+        if (!grid) return;
+        grid.innerHTML = list.map((b) => (
+          `<a class="card" data-cat="${cat}" data-name="${(b.name + " " + (b.aliases || "")).toLowerCase()}" href="${b.url}" target="_blank" rel="noopener">` +
+          `<div class="icon"><img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(b.domain)}&sz=64" alt="" loading="lazy" /></div>` +
+          `<div class="meta"><h3>${b.name}</h3><p>${b.desc}</p></div>` +
+          `<span class="open">开</span>` +
+          `</a>`
+        )).join("");
+      }
+
+      // 主要使用：高频创作工具（可点击跳转）
+      const MAIN_TOOLS = [
+        { name: "即梦", domain: "jimeng.jianying.com", url: "https://jimeng.jianying.com/", desc: "字节 AI 图像/视频", aliases: "jimeng dreamina" },
+        { name: "Liblib", domain: "www.liblib.art", url: "https://www.liblib.art/", desc: "AI 模型与工作流", aliases: "liblibai" },
+        { name: "Lib.TV", domain: "www.liblib.tv", url: "https://www.liblib.tv/", desc: "AI 视频创作平台", aliases: "libtv liblibtv" },
+        { name: "可灵", domain: "klingai.com", url: "https://klingai.com/", desc: "快手 AI 视频生成", aliases: "kling" },
+        { name: "豆包", domain: "www.doubao.com", url: "https://www.doubao.com/", desc: "字节对话助手", aliases: "doubao" },
+        { name: "花瓣", domain: "huaban.com", url: "https://huaban.com/", desc: "灵感采集与灵感板", aliases: "huaban" },
+        { name: "Roboneo", domain: "www.roboneo.com", url: "https://www.roboneo.com/", desc: "AI 设计助手", aliases: "roboneo" },
+        { name: "NB3DChart", domain: "www.pslkzs.com", url: "https://www.pslkzs.com/chart/charts.php", desc: "在线三维图表", aliases: "nb 3d charts" },
+        { name: "Runway", domain: "runwayml.com", url: "https://runwayml.com/", desc: "AI 视频生成剪辑", aliases: "runwayml" },
+        { name: "腾讯混元3D", domain: "3d.hunyuan.tencent.com", url: "https://3d.hunyuan.tencent.com/", desc: "混元三维生成", aliases: "hunyuan 3d" },
+        { name: "Lovart", domain: "www.lovart.ai", url: "https://www.lovart.ai/", desc: "AI 设计 Agent", aliases: "lovart" },
+        { name: "TapNow", domain: "www.tapnow.ai", url: "https://www.tapnow.ai/", desc: "AI 创作工作台", aliases: "tapnow" },
+        { name: "易知微", domain: "easyv.cloud", url: "https://easyv.cloud/", desc: "数字孪生可视化 EasyV", aliases: "easyv" },
+        { name: "Gitee", domain: "gitee.com", url: "https://gitee.com/", desc: "代码托管", aliases: "gitee git" },
+        { name: "站酷", domain: "www.zcool.com.cn", url: "https://www.zcool.com.cn/", desc: "设计师作品社区", aliases: "zcool" }
+      ];
+
+      // 书签栏截图识别出的常用站点
       const FAV_BOOKMARKS = [
         { name: "shadcn/ui", domain: "ui.shadcn.com", url: "https://ui.shadcn.com/", desc: "组件与设计系统" },
         { name: "飞书", domain: "www.feishu.cn", url: "https://www.feishu.cn/", desc: "协作文档与会议" },
@@ -859,16 +897,8 @@
         { name: "知乎", domain: "www.zhihu.com", url: "https://www.zhihu.com/", desc: "中文问答经验" }
       ];
 
-      const favGrid = document.getElementById("fav-grid");
-      if (favGrid) {
-        favGrid.innerHTML = FAV_BOOKMARKS.map((b) => (
-          `<a class="card" data-cat="fav" data-name="${b.name.toLowerCase()}" href="${b.url}" target="_blank" rel="noopener">` +
-          `<div class="icon"><img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(b.domain)}&sz=64" alt="" loading="lazy" /></div>` +
-          `<div class="meta"><h3>${b.name}</h3><p>${b.desc}</p></div>` +
-          `<span class="open">开</span>` +
-          `</a>`
-        )).join("");
-      }
+      renderCards("main-grid", MAIN_TOOLS, "main");
+      renderCards("fav-grid", FAV_BOOKMARKS, "fav");
 
       const q = document.getElementById("q");
       const clearBtn = document.getElementById("clear");
