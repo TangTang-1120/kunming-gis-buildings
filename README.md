@@ -4,8 +4,10 @@
 
 ## 在线入口
 
-- GIS 地图：`index.html`
-- 工具导航：`product.html`
+- 站点：https://tangtang-1120.github.io/kunming-gis-buildings/
+- GIS 地图：https://tangtang-1120.github.io/kunming-gis-buildings/index.html
+- 工具导航：https://tangtang-1120.github.io/kunming-gis-buildings/product.html
+- 仓库：https://github.com/TangTang-1120/kunming-gis-buildings
 
 ## 本地预览
 
