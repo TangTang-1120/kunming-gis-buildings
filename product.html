@@ -340,8 +340,9 @@
       width: 100%;
       backface-visibility: hidden;
       -webkit-backface-visibility: hidden;
-      border-radius: inherit;
-      overflow: hidden;
+      border-radius: 0;
+      overflow: visible;
+      background: transparent;
     }
 
     .banner-art-face img,
@@ -954,10 +955,10 @@
             <picture>
               <source srcset="assets/banner-mascot.webp" type="image/webp" />
               <img
-                src="assets/banner-mascot.jpg"
+                src="assets/banner-mascot.png"
                 alt="TangTang"
-                width="640"
-                height="603"
+                width="560"
+                height="534"
                 decoding="async"
                 loading="eager"
                 fetchpriority="high"
