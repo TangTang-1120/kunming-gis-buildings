@@ -218,7 +218,7 @@
       position: relative;
       z-index: 2;
       justify-self: end;
-      width: min(380px, 100%);
+      width: min(420px, 100%);
       perspective: 900px;
       --rx: 0deg;
       --ry: 0deg;
@@ -235,6 +235,7 @@
       transition: transform 0.12s ease-out, filter 0.25s ease;
       will-change: transform;
       filter: drop-shadow(0 0 18px rgba(56, 200, 255, 0.18));
+      overflow: visible;
     }
 
     .banner-art-card:hover,
@@ -246,11 +247,12 @@
       width: 100%;
       height: auto;
       display: block;
+      object-fit: contain;
+      object-position: center;
       background: transparent;
       transform: translateZ(18px);
       user-select: none;
       -webkit-user-drag: none;
-      mix-blend-mode: screen;
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -763,7 +765,7 @@
       </div>
       <div class="banner-art" id="banner-art">
         <div class="banner-art-card">
-          <img src="assets/banner-mascot.png" alt="TangTang" width="698" height="582" decoding="async" fetchpriority="high" />
+          <img src="assets/banner-mascot.png" alt="TangTang" width="1024" height="1024" decoding="async" fetchpriority="high" />
         </div>
       </div>
     </div>
