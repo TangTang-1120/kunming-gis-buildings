@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stackbay · 书签聚合</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #171e26;
+      --panel-2: #1c2530;
+      --line: #2a3542;
+      --text: #e8eef3;
+      --muted: #8b9aab;
+      --accent: #3ecfbe;
+      --accent-dim: rgba(62, 207, 190, 0.14);
+      --font: "IBM Plex Sans SC", "PingFang SC", sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* 通屏图案：从 Banner 一路向下延伸 */
+    .page-fx {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+      background:
+        radial-gradient(1100px 420px at 8% 8%, rgba(62, 207, 190, 0.22), transparent 58%),
+        radial-gradient(900px 380px at 92% 4%, rgba(240, 179, 90, 0.12), transparent 52%),
+        radial-gradient(1000px 520px at 70% 42%, rgba(40, 100, 140, 0.12), transparent 55%),
+        radial-gradient(800px 400px at 20% 70%, rgba(62, 207, 190, 0.08), transparent 50%),
+        linear-gradient(180deg, #121a22 0%, #0f1419 38%, #0f1419 100%);
+    }
+
+    .page-fx::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(62, 207, 190, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(62, 207, 190, 0.05) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(180deg, black 0%, black 55%, transparent 100%);
+    }
+
+    .page-fx .orbit {
+      position: absolute;
+      right: -4%;
+      top: 40px;
+      width: min(480px, 58vw);
+      height: min(480px, 58vw);
+      border-radius: 50%;
+      border: 1px solid rgba(62, 207, 190, 0.2);
+      animation: spin-slow 18s linear infinite;
+      transform-origin: center;
+    }
+
+    .page-fx .orbit::before {
+      content: "";
+      position: absolute;
+      inset: -14%;
+      border-radius: 50%;
+      border: 1px solid rgba(62, 207, 190, 0.1);
+    }
+
+    .page-fx .orbit::after {
+      content: "";
+      position: absolute;
+      inset: 18%;
+      border-radius: 50%;
+      border: 1px solid rgba(240, 179, 90, 0.18);
+    }
+
+    .page-fx .orbit-2 {
+      position: absolute;
+      left: -8%;
+      top: 52%;
+      width: min(360px, 48vw);
+      height: min(360px, 48vw);
+      border-radius: 50%;
+      border: 1px solid rgba(62, 207, 190, 0.1);
+      animation: spin-slow 28s linear infinite reverse;
+    }
+
+    @keyframes spin-slow {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Banner 透明，让图案穿过去 */
+    .banner {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      min-height: clamp(200px, 28vh, 280px);
+      display: flex;
+      align-items: flex-end;
+      overflow: visible;
+      background: transparent;
+    }
+
+    .banner-inner {
+      position: relative;
+      z-index: 1;
+      width: min(1100px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 36px 0 28px;
+    }
+
+    .banner-kicker {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    .banner h1 {
+      font-size: clamp(28px, 5vw, 42px);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 8px;
+    }
+
+    .banner h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .banner p {
+      color: var(--muted);
+      font-size: 14px;
+      max-width: 36em;
+      margin-bottom: 16px;
+    }
+
+    .banner-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .banner-actions a {
+      display: inline-flex;
+      align-items: center;
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 650;
+      border: 1px solid transparent;
+    }
+
+    .banner-actions .primary {
+      background: var(--accent);
+      color: #062018;
+    }
+
+    .banner-actions .primary:hover { filter: brightness(1.08); }
+
+    .banner-actions .ghost {
+      border-color: var(--line);
+      background: rgba(23, 30, 38, 0.7);
+      color: var(--text);
+    }
+
+    .banner-actions .ghost:hover { border-color: #3d4b5c; }
+
+    /* 嵌入进行中的 GIS */
+    .gis-embed {
+      position: relative;
+      z-index: 1;
+      width: min(1100px, calc(100% - 28px));
+      margin: 0 auto 8px;
+      padding-top: 4px;
+    }
+
+    .gis-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .gis-head h2 {
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .gis-head h2 .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(240, 179, 90, 0.16);
+      color: #f0b35a;
+      border: 1px solid rgba(240, 179, 90, 0.35);
+    }
+
+    .gis-head p {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .gis-head a {
+      font-size: 12px;
+      font-weight: 650;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .gis-frame {
+      position: relative;
+      height: min(520px, 62vh);
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      overflow: hidden;
+      background: #071018;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+    }
+
+    .gis-frame iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      background: #071018;
+    }
+
+    .shell {
+      position: relative;
+      z-index: 1;
+      width: min(1100px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 16px 0 40px;
+    }
+
+    /* 顶栏：品牌缩小，操作放大 */
+    .top {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+      padding: 10px 0;
+      background: transparent;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 15px;
+      white-space: nowrap;
+    }
+
+    .logo i {
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      background: var(--accent);
+      display: block;
+    }
+
+    .search {
+      position: relative;
+    }
+
+    .search input {
+      width: 100%;
+      height: 40px;
+      padding: 0 14px 0 38px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .search input:focus { border-color: var(--accent); }
+
+    .search::before {
+      content: "⌕";
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .top-actions a,
+    .top-actions button {
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 9px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .top-actions a:hover,
+    .top-actions button:hover {
+      color: var(--text);
+      border-color: #3d4b5c;
+    }
+
+    /* 分类标签：主操作 */
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+      padding: 6px 0 10px;
+      background: transparent;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .tab:hover { color: var(--text); }
+
+    .tab.active {
+      background: var(--accent-dim);
+      border-color: rgba(62, 207, 190, 0.45);
+      color: var(--accent);
+    }
+
+    .tab .n {
+      margin-left: 4px;
+      opacity: 0.7;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hint {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .hint kbd {
+      font: inherit;
+      font-size: 11px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      padding: 1px 6px;
+      color: var(--text);
+      background: var(--panel);
+    }
+
+    /* 更密的卡片：像启动台 */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .card {
+      display: grid;
+      grid-template-columns: 36px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      min-height: 64px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      transition: background .12s, border-color .12s;
+    }
+
+    .card:hover,
+    .card:focus-visible {
+      background: var(--panel-2);
+      border-color: rgba(62, 207, 190, 0.4);
+      outline: none;
+    }
+
+    .card.hidden { display: none; }
+
+    .icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: #10161d;
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .icon img {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+    }
+
+    .meta { min-width: 0; }
+
+    .meta h3 {
+      font-size: 14px;
+      font-weight: 650;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .meta p {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .open {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      opacity: 0;
+      transition: opacity .12s;
+    }
+
+    .card:hover .open,
+    .card:focus-visible .open { opacity: 1; }
+
+    .group {
+      margin-bottom: 22px;
+      scroll-margin-top: 120px;
+    }
+
+    .group.hidden { display: none; }
+
+    .group-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .group-title span {
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .empty {
+      display: none;
+      text-align: center;
+      padding: 48px 12px;
+      color: var(--muted);
+      font-size: 14px;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+    }
+
+    .empty.show { display: block; }
+
+    footer {
+      margin-top: 28px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    footer a { color: var(--accent); font-weight: 600; }
+
+    @media (max-width: 960px) {
+      .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 720px) {
+      .banner { min-height: 180px; }
+      .page-fx .orbit { right: -18%; width: min(380px, 72vw); height: min(380px, 72vw); opacity: 0.7; }
+      .banner-inner { padding: 28px 0 22px; }
+      .top {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+          "logo actions"
+          "search search";
+      }
+      .logo { grid-area: logo; }
+      .search { grid-area: search; }
+      .top-actions { grid-area: actions; }
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .open { display: none; }
+    }
+
+    @media (max-width: 420px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-fx" aria-hidden="true">
+    <div class="orbit"></div>
+    <div class="orbit-2"></div>
+  </div>
+
+  <section class="banner" aria-label="Stackbay 横幅">
+    <div class="banner-inner">
+      <div class="banner-kicker">Personal Tool Stack</div>
+      <h1>Stackbay <em>书签聚合台</em></h1>
+      <p>按用途分类你的常用站点。搜索、筛选、一点即开。</p>
+      <div class="banner-actions">
+        <a class="primary" href="#q">开始搜索</a>
+        <a class="ghost" href="#gis">查看进行中的 GIS</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="gis-embed" id="gis">
+    <div class="gis-head">
+      <div>
+        <h2>昆明全市 · GIS 建筑 Demo <span class="badge">进行中 · 全市</span></h2>
+        <p>全市总览 + 放大后动态加载 OSM 建筑（嵌入预览）</p>
+      </div>
+      <a href="index.html" target="_blank" rel="noopener">全屏打开 →</a>
+    </div>
+    <div class="gis-frame">
+      <iframe
+        src="index.html"
+        title="昆明小区 GIS 建筑模拟"
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"
+      ></iframe>
+    </div>
+  </section>
+
+  <div class="shell">
+    <header class="top">
+      <div class="logo"><i></i> Stackbay</div>
+      <div class="search">
+        <input id="q" type="search" placeholder="搜索站点…" autocomplete="off" />
+      </div>
+      <div class="top-actions">
+        <button type="button" id="clear" title="清空筛选">清空</button>
+        <a href="#gis">GIS</a>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs" aria-label="分类筛选">
+      <button class="tab active" type="button" data-cat="all">全部<span class="n"></span></button>
+      <button class="tab" type="button" data-cat="search">搜索<span class="n"></span></button>
+      <button class="tab" type="button" data-cat="model">模型<span class="n"></span></button>
+      <button class="tab" type="button" data-cat="design">设计<span class="n"></span></button>
+      <button class="tab" type="button" data-cat="dev">开发<span class="n"></span></button>
+      <button class="tab" type="button" data-cat="work">协作<span class="n"></span></button>
+      <button class="tab" type="button" data-cat="ship">上线<span class="n"></span></button>
+    </nav>
+
+    <div class="hint">
+      <span>点击卡片直接打开站点 · 支持搜索与分类筛选</span>
+      <span><kbd>/</kbd> 聚焦搜索</span>
+    </div>
+
+    <div id="catalog">
+      <section class="group" data-cat="search">
+        <div class="group-title"><span>发现与搜索</span></div>
+        <div class="grid">
+          <a class="card" data-cat="search" data-name="perplexity" href="https://www.perplexity.ai/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=perplexity.ai&sz=64" alt="" /></div>
+            <div class="meta"><h3>Perplexity</h3><p>AI 搜索核对事实</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="search" data-name="phind" href="https://www.phind.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=phind.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Phind</h3><p>工程师技术搜索</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="search" data-name="genspark" href="https://www.genspark.ai/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=genspark.ai&sz=64" alt="" /></div>
+            <div class="meta"><h3>Genspark</h3><p>AI 信息整理</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="search" data-name="google" href="https://www.google.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=google.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Google</h3><p>通用搜索文档</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="search" data-name="zhihu 知乎" href="https://www.zhihu.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=zhihu.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>知乎</h3><p>中文问答经验</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="search" data-name="youtube" href="https://www.youtube.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=youtube.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>YouTube</h3><p>视频教学演示</p></div>
+            <span class="open">开</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="group" data-cat="model">
+        <div class="group-title"><span>AI 模型</span></div>
+        <div class="grid">
+          <a class="card" data-cat="model" data-name="claude anthropic" href="https://claude.ai/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=claude.ai&sz=64" alt="" /></div>
+            <div class="meta"><h3>Claude</h3><p>长文推理对话</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="model" data-name="openai chatgpt" href="https://chatgpt.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>OpenAI</h3><p>ChatGPT / API</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="model" data-name="mistral" href="https://chat.mistral.ai/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=mistral.ai&sz=64" alt="" /></div>
+            <div class="meta"><h3>Mistral</h3><p>开源取向模型</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="model" data-name="ollama" href="https://ollama.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=ollama.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Ollama</h3><p>本机跑模型</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="model" data-name="replicate" href="https://replicate.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=replicate.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Replicate</h3><p>云端模型 API</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="model" data-name="banana" href="https://www.banana.dev/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=banana.dev&sz=64" alt="" /></div>
+            <div class="meta"><h3>Banana.dev</h3><p>GPU 模型部署</p></div>
+            <span class="open">开</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="group" data-cat="design">
+        <div class="group-title"><span>设计与视觉</span></div>
+        <div class="grid">
+          <a class="card" data-cat="design" data-name="excalidraw" href="https://excalidraw.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=excalidraw.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Excalidraw</h3><p>手绘白板流程</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="design" data-name="v0 vercel" href="https://v0.dev/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=v0.dev&sz=64" alt="" /></div>
+            <div class="meta"><h3>v0.dev</h3><p>文字生成 UI</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="design" data-name="framer" href="https://www.framer.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=framer.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Framer</h3><p>落地页设计</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="design" data-name="lucide" href="https://lucide.dev/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=lucide.dev&sz=64" alt="" /></div>
+            <div class="meta"><h3>Lucide</h3><p>开源图标库</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="design" data-name="krea" href="https://www.krea.ai/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=krea.ai&sz=64" alt="" /></div>
+            <div class="meta"><h3>Krea</h3><p>生成式图像</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="design" data-name="midjourney" href="https://www.midjourney.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=midjourney.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Midjourney</h3><p>AI 出图</p></div>
+            <span class="open">开</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="group" data-cat="dev">
+        <div class="group-title"><span>开发</span></div>
+        <div class="grid">
+          <a class="card" data-cat="dev" data-name="cursor" href="https://cursor.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=cursor.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Cursor</h3><p>AI IDE 写码</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="dev" data-name="codeium" href="https://codeium.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=codeium.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Codeium</h3><p>代码补全</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="dev" data-name="nextjs next.js" href="https://nextjs.org/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=nextjs.org&sz=64" alt="" /></div>
+            <div class="meta"><h3>Next.js</h3><p>React 全栈</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="dev" data-name="vite" href="https://vitejs.dev/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=vitejs.dev&sz=64" alt="" /></div>
+            <div class="meta"><h3>Vite</h3><p>前端构建</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="dev" data-name="expo" href="https://expo.dev/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=expo.dev&sz=64" alt="" /></div>
+            <div class="meta"><h3>Expo</h3><p>跨端 App</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="dev" data-name="github" href="https://github.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=github.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>GitHub</h3><p>代码仓库 PR</p></div>
+            <span class="open">开</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="group" data-cat="work">
+        <div class="group-title"><span>协作与效率</span></div>
+        <div class="grid">
+          <a class="card" data-cat="work" data-name="notion" href="https://www.notion.so/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=notion.so&sz=64" alt="" /></div>
+            <div class="meta"><h3>Notion</h3><p>文档知识库</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="work" data-name="linear" href="https://linear.app/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=linear.app&sz=64" alt="" /></div>
+            <div class="meta"><h3>Linear</h3><p>任务 Issue</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="work" data-name="google sheets" href="https://sheets.google.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=sheets.google.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Google Sheets</h3><p>表格指标</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="work" data-name="raycast" href="https://www.raycast.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=raycast.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Raycast</h3><p>macOS 启动器</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="work" data-name="zapier" href="https://zapier.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=zapier.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Zapier</h3><p>跨应用自动化</p></div>
+            <span class="open">开</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="group" data-cat="ship">
+        <div class="group-title"><span>上线与观测</span></div>
+        <div class="grid">
+          <a class="card" data-cat="ship" data-name="vercel" href="https://vercel.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=vercel.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Vercel</h3><p>部署托管</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="ship" data-name="cloudflare" href="https://www.cloudflare.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=cloudflare.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>Cloudflare</h3><p>CDN 域名安全</p></div>
+            <span class="open">开</span>
+          </a>
+          <a class="card" data-cat="ship" data-name="posthog" href="https://posthog.com/" target="_blank" rel="noopener">
+            <div class="icon"><img src="https://www.google.com/s2/favicons?domain=posthog.com&sz=64" alt="" /></div>
+            <div class="meta"><h3>PostHog</h3><p>产品分析漏斗</p></div>
+            <span class="open">开</span>
+          </a>
+        </div>
+      </section>
+
+      <p class="empty" id="empty">没有匹配站点，换个词或点「全部」。</p>
+    </div>
+
+    <footer>
+      <span>共 <b id="total">0</b> 个站点 · 点卡片即开</span>
+      <a href="#gis">查看进行中的 GIS →</a>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      const q = document.getElementById("q");
+      const clearBtn = document.getElementById("clear");
+      const empty = document.getElementById("empty");
+      const total = document.getElementById("total");
+      const tabs = Array.from(document.querySelectorAll(".tab"));
+      const cards = Array.from(document.querySelectorAll(".card"));
+      const groups = Array.from(document.querySelectorAll(".group"));
+
+      let cat = "all";
+
+      function counts() {
+        const map = { all: cards.length };
+        cards.forEach((c) => {
+          const k = c.dataset.cat;
+          map[k] = (map[k] || 0) + 1;
+        });
+        tabs.forEach((t) => {
+          const n = t.querySelector(".n");
+          if (n) n.textContent = map[t.dataset.cat] ?? 0;
+        });
+        total.textContent = String(cards.length);
+      }
+
+      function apply() {
+        const keyword = q.value.trim().toLowerCase();
+        let shown = 0;
+
+        cards.forEach((card) => {
+          const inCat = cat === "all" || card.dataset.cat === cat;
+          const name = ((card.dataset.name || "") + " " + (card.querySelector("h3")?.textContent || "")).toLowerCase();
+          const hit = !keyword || name.includes(keyword);
+          const show = inCat && hit;
+          card.classList.toggle("hidden", !show);
+          if (show) shown += 1;
+        });
+
+        groups.forEach((g) => {
+          const visible = g.querySelectorAll(".card:not(.hidden)").length;
+          g.classList.toggle("hidden", visible === 0);
+        });
+
+        empty.classList.toggle("show", shown === 0);
+      }
+
+      tabs.forEach((t) => {
+        t.addEventListener("click", () => {
+          cat = t.dataset.cat;
+          tabs.forEach((x) => x.classList.toggle("active", x === t));
+          apply();
+        });
+      });
+
+      q.addEventListener("input", apply);
+      clearBtn.addEventListener("click", () => {
+        q.value = "";
+        cat = "all";
+        tabs.forEach((x) => x.classList.toggle("active", x.dataset.cat === "all"));
+        apply();
+        q.focus();
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "/" && document.activeElement !== q) {
+          e.preventDefault();
+          q.focus();
+          q.select();
+        }
+        if (e.key === "Escape") {
+          q.blur();
+        }
+      });
+
+      // Banner CTA：滚到搜索并聚焦
+      document.querySelector('.banner-actions .primary')?.addEventListener("click", (e) => {
+        e.preventDefault();
+        q.focus();
+        q.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+
+      counts();
+      apply();
+    })();
+  </script>
+</body>
+</html>

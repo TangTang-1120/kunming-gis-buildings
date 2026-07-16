@@ -1,0 +1,2312 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>昆明全市 · GIS 建筑 Demo</title>
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #071018;
+      --panel: rgba(8, 18, 28, 0.82);
+      --line: rgba(64, 196, 255, 0.35);
+      --text: #e8f6ff;
+      --muted: #8fb4c9;
+      --accent: #3ec8ff;
+      --warn: #f0b35a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body, #map {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "PingFang SC", "Noto Sans SC", "Helvetica Neue", sans-serif;
+      -webkit-text-size-adjust: 100%;
+      touch-action: manipulation;
+    }
+
+    #map { position: absolute; inset: 0; }
+
+    .panel {
+      position: absolute;
+      z-index: 20;
+      top: 18px;
+      left: 18px;
+      width: min(340px, calc(100vw - 36px));
+      max-height: calc(100vh - 36px);
+      padding: 18px 18px 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-handle {
+      display: none;
+    }
+
+    .panel-toggle {
+      display: none;
+    }
+
+    .panel-body {
+      overflow: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      min-height: 0;
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 1.3;
+      margin-bottom: 6px;
+    }
+
+    .sub {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.55;
+      margin-bottom: 14px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 13px;
+    }
+
+    .row span:last-child { color: var(--accent); font-variant-numeric: tabular-nums; text-align: right; }
+
+    .badge {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--warn);
+      border: 1px solid rgba(240, 179, 90, 0.4);
+      background: rgba(240, 179, 90, 0.12);
+      vertical-align: middle;
+    }
+
+    .districts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 12px 0 4px;
+    }
+
+    .districts button {
+      border: 1px solid rgba(62, 200, 255, 0.25);
+      background: rgba(62, 200, 255, 0.08);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .districts button:hover,
+    .districts button.active {
+      background: rgba(62, 200, 255, 0.22);
+      border-color: var(--accent);
+    }
+
+    .community-panel {
+      margin-top: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.22);
+      overflow: hidden;
+      display: none;
+    }
+
+    .community-panel.show { display: block; }
+
+    .community-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .community-panel-head strong {
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .community-list {
+      max-height: 180px;
+      overflow: auto;
+      padding: 6px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .community-list button {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .community-list button:hover,
+    .community-list button.active {
+      background: rgba(62, 200, 255, 0.14);
+    }
+
+    .community-list button span {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .community-list .section-label {
+      padding: 8px 10px 4px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .community-marker.street-marker {
+      border-style: dashed;
+      opacity: 0.95;
+    }
+
+    .community-marker .mk-name {
+      display: block;
+      font-weight: 650;
+    }
+
+    .community-marker .mk-count {
+      display: block;
+      margin-top: 2px;
+      font-size: 11px;
+      opacity: 0.9;
+      font-weight: 500;
+    }
+
+    .search-box { position: relative; margin: 12px 0 4px; }
+
+    .search-box input {
+      width: 100%;
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 9px;
+      border: 1px solid rgba(62, 200, 255, 0.28);
+      background: rgba(0, 0, 0, 0.28);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .search-box input::placeholder { color: var(--muted); }
+    .search-box input:focus { border-color: var(--accent); }
+
+    .search-results {
+      display: none;
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      max-height: 180px;
+      overflow: auto;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(8, 18, 28, 0.98);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+      z-index: 30;
+    }
+
+    .search-results.show { display: block; }
+
+    .search-results button {
+      display: flex;
+      width: 100%;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 9px 12px;
+      border: 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .search-results button:last-child { border-bottom: 0; }
+    .search-results button:hover { background: rgba(62, 200, 255, 0.14); }
+    .search-results button span { color: var(--muted); font-size: 12px; }
+    .search-empty { padding: 10px 12px; font-size: 12px; color: var(--muted); }
+
+    .basemap {
+      display: flex;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .basemap button {
+      flex: 1;
+      border: 1px solid rgba(62, 200, 255, 0.25);
+      background: rgba(62, 200, 255, 0.08);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 0;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .basemap button:hover,
+    .basemap button.active {
+      background: rgba(62, 200, 255, 0.22);
+      border-color: var(--accent);
+    }
+
+    .hint {
+      position: absolute;
+      z-index: 2;
+      right: 18px;
+      bottom: 18px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      backdrop-filter: blur(10px);
+      max-width: min(420px, calc(100vw - 36px));
+    }
+
+    .maplibregl-ctrl-attrib,
+    .maplibregl-ctrl-logo { opacity: 0.55; }
+
+    .maplibregl-popup-content {
+      background: rgba(8, 18, 28, 0.92);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+      min-width: 160px;
+    }
+
+    .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+      border-top-color: rgba(8, 18, 28, 0.92);
+    }
+
+    .maplibregl-popup-close-button {
+      color: var(--muted);
+      font-size: 18px;
+      padding: 4px 8px;
+    }
+
+    .popup-community {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .popup-meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .community-marker,
+    .district-marker {
+      border: 1px solid rgba(126, 216, 255, 0.7);
+      background: rgba(8, 18, 28, 0.88);
+      color: #7ed8ff;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+      font-family: inherit;
+    }
+
+    .district-marker {
+      border-color: rgba(240, 179, 90, 0.7);
+      color: #f0b35a;
+      font-weight: 650;
+    }
+
+    .community-marker:hover,
+    .district-marker:hover,
+    .community-marker.active-community {
+      background: rgba(62, 200, 255, 0.22);
+      color: #e8f6ff;
+    }
+
+    .community-marker.active-community {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(62, 200, 255, 0.25);
+    }
+
+    /* —— 手机自适应 —— */
+    @media (max-width: 768px) {
+      .panel {
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-height: min(58vh, 520px);
+        padding:
+          6px
+          max(12px, env(safe-area-inset-right))
+          max(12px, env(safe-area-inset-bottom))
+          max(12px, env(safe-area-inset-left));
+        border-radius: 16px 16px 0 0;
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+        box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.45);
+        transition: max-height 0.28s ease;
+      }
+
+      .panel.collapsed {
+        max-height: calc(64px + env(safe-area-inset-bottom));
+      }
+
+      .panel.collapsed .panel-body {
+        display: none;
+      }
+
+      .panel-handle {
+        display: block;
+        width: 40px;
+        height: 4px;
+        margin: 4px auto 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.28);
+        flex-shrink: 0;
+      }
+
+      .panel-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        flex-shrink: 0;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        padding: 4px 4px 10px;
+        cursor: pointer;
+        text-align: left;
+      }
+
+      .panel-toggle .toggle-title {
+        font-size: 15px;
+        font-weight: 650;
+      }
+
+      .panel-toggle .toggle-meta {
+        display: block;
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .panel-toggle .toggle-chevron {
+        color: var(--accent);
+        font-size: 12px;
+        transition: transform 0.2s ease;
+      }
+
+      .panel.collapsed .panel-toggle .toggle-chevron {
+        transform: rotate(180deg);
+      }
+
+      .eyebrow { display: none; }
+      .sub { display: none; }
+
+      h1 {
+        font-size: 16px;
+        margin-bottom: 8px;
+      }
+
+      .row {
+        padding: 6px 0;
+        font-size: 12px;
+      }
+
+      .stats-block .row:nth-child(n+4) {
+        display: none;
+      }
+
+      .districts {
+        margin: 8px 0 4px;
+        gap: 8px;
+      }
+
+      .districts button {
+        min-height: 36px;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .community-list {
+        max-height: min(28vh, 220px);
+      }
+
+      .community-list button {
+        min-height: 40px;
+        padding: 10px 12px;
+        font-size: 14px;
+      }
+
+      .search-box input {
+        height: 42px;
+        font-size: 16px;
+      }
+
+      .basemap button {
+        min-height: 40px;
+        font-size: 13px;
+      }
+
+      .hint {
+        left: 12px;
+        right: 12px;
+        bottom: calc(72px + env(safe-area-inset-bottom));
+        max-width: none;
+        font-size: 11px;
+        padding: 8px 12px;
+        text-align: center;
+        pointer-events: none;
+      }
+
+      body:has(.panel:not(.collapsed)) .hint {
+        display: none;
+      }
+
+      .maplibregl-ctrl-top-right {
+        top: max(8px, env(safe-area-inset-top));
+        right: 8px;
+      }
+
+      .maplibregl-ctrl-bottom-right,
+      .maplibregl-ctrl-bottom-left {
+        bottom: calc(72px + env(safe-area-inset-bottom));
+      }
+
+      .community-marker,
+      .district-marker {
+        padding: 6px 9px;
+        font-size: 11px;
+        max-width: 42vw;
+        white-space: normal;
+        text-align: center;
+        line-height: 1.25;
+      }
+
+      .community-marker .mk-count {
+        font-size: 10px;
+      }
+
+      .maplibregl-popup-content {
+        max-width: min(280px, calc(100vw - 48px));
+      }
+    }
+
+    @media (max-width: 380px) {
+      .panel.collapsed {
+        max-height: calc(58px + env(safe-area-inset-bottom));
+      }
+
+      h1 { font-size: 15px; }
+      .badge { display: none; }
+    }
+
+    @media (min-width: 769px) {
+      .panel.collapsed {
+        max-height: calc(100vh - 36px);
+      }
+
+      .panel.collapsed .panel-body {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <aside class="panel collapsed" id="panel">
+    <div class="panel-handle" aria-hidden="true"></div>
+    <button type="button" class="panel-toggle" id="panel-toggle" aria-expanded="false" aria-controls="panel-body">
+      <span>
+        <span class="toggle-title">昆明建筑 Demo</span>
+        <span class="toggle-meta" id="panel-toggle-meta">点开选择区县</span>
+      </span>
+      <span class="toggle-chevron" aria-hidden="true">▲</span>
+    </button>
+    <div class="panel-body" id="panel-body">
+      <div class="eyebrow">Kunming City Demo</div>
+      <h1>昆明全市建筑 Demo <span class="badge">全市</span></h1>
+      <p class="sub">小区名称来自公开小区名录（真实名称）；街道来自 OSM。地图主要标注小区并按形态画 Demo 地块，不改本地 geojson。</p>
+
+      <div class="stats-block">
+        <div class="row"><span>模式</span><span id="mode">全市总览</span></div>
+        <div class="row"><span>加载状态</span><span id="status">就绪</span></div>
+        <div class="row"><span>当前视窗建筑</span><span id="count">0</span></div>
+        <div class="row"><span>高度范围</span><span id="range">—</span></div>
+        <div class="row"><span>目前选中</span><span id="picked">点击建筑</span></div>
+      </div>
+
+      <div class="districts" id="districts"></div>
+      <div class="community-panel" id="community-panel">
+        <div class="community-panel-head">
+          <div><strong id="community-panel-title">小区列表</strong></div>
+          <span id="community-panel-count">0</span>
+        </div>
+        <div class="community-list" id="community-list"></div>
+      </div>
+
+      <div class="search-box">
+        <input id="community-search" type="search" placeholder="搜索区县 / 小区" autocomplete="off" enterkeyhint="search" />
+        <div class="search-results" id="community-results"></div>
+      </div>
+
+      <div class="basemap">
+        <button type="button" data-style="satellite" class="active">卫星</button>
+        <button type="button" data-style="dark">深色</button>
+        <button type="button" data-style="light">浅色</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="hint">上滑/点开面板选区县 · 地图可双指缩放</div>
+
+  <script>
+    const CITY_CENTER = [102.7126, 25.0406];
+    const SAMPLE_CENTER = [102.71471, 25.07640];
+    const BUILDING_MIN_ZOOM = 15;
+    const MAX_WAYS = 600;
+    const LEVEL_HEIGHT = 3.3;
+    const BUILDING_COLOR = "#3aa8ff";
+    const BUILDING_SELECTED = "#ffffff";
+    const BUILDING_OPACITY = 0.62;
+    const BUILDING_EDGE = "#e8f6ff";
+
+    const DISTRICTS = [
+      {
+        name: "五华区",
+        color: "#2dd4bf",
+        center: [102.7074, 25.042],
+        zoom: 13.2,
+        streets: [
+          { name: "鼓楼街道", center: [102.721851, 25.051199] },
+          { name: "联盟街道", center: [102.72276, 25.066901] },
+          { name: "拓东街道", center: [102.724028, 25.041456] },
+          { name: "大观街道", center: [102.695862, 25.041604] },
+          { name: "丰宁街道", center: [102.678235, 25.062275] },
+          { name: "华山街道", center: [102.704219, 25.055093] },
+          { name: "护国街道", center: [102.710442, 25.042936] },
+          { name: "莲华街道", center: [102.696989, 25.069625] },
+          { name: "龙翔街道", center: [102.687361, 25.052156] },
+          { name: "太和街道", center: [102.719424, 25.026119] },
+          { name: "金碧街道", center: [102.698482, 25.030766] },
+          { name: "西苑街道", center: [102.666169, 25.043403] },
+          { name: "棕树营街道", center: [102.677777, 25.039871] },
+          { name: "黑林铺街道", center: [102.652338, 25.067036] },
+          { name: "普吉街道", center: [102.668742, 25.102321] }
+        ],
+        communities: [
+          { name: "碧桂园春城映象春城龙苑", center: [102.649058, 25.065096], street: "黑林铺街道" },
+          { name: "碧桂园春城映像春城名苑", center: [102.651098, 25.065626], street: "黑林铺街道" },
+          { name: "春城慧谷2期", center: [102.651998, 25.064936], street: "黑林铺街道" },
+          { name: "碧桂园春城映象春城上苑", center: [102.654308, 25.065196], street: "黑林铺街道" },
+          { name: "春城慧谷B区", center: [102.655658, 25.065946], street: "黑林铺街道" },
+          { name: "秀才塘新村", center: [102.650878, 25.065366], street: "黑林铺街道" },
+          { name: "春城慧谷东区", center: [102.650358, 25.066936], street: "黑林铺街道" },
+          { name: "义承金川府", center: [102.651708, 25.066256], street: "黑林铺街道" },
+          { name: "丽阳星城北区", center: [102.652898, 25.065596], street: "黑林铺街道" },
+          { name: "上峰新村", center: [102.653738, 25.066746], street: "黑林铺街道" },
+          { name: "丽阳星城南区", center: [102.650388, 25.067446], street: "黑林铺街道" },
+          { name: "丽阳星城南区1区", center: [102.651288, 25.067616], street: "黑林铺街道" },
+          { name: "团山春晓", center: [102.653008, 25.067986], street: "黑林铺街道" },
+          { name: "融城园城", center: [102.653598, 25.066256], street: "黑林铺街道" },
+          { name: "招商雍和府", center: [102.654528, 25.066756], street: "黑林铺街道" },
+          { name: "塔山花园", center: [102.650428, 25.068216], street: "黑林铺街道" },
+          { name: "朝花曦拾", center: [102.651078, 25.068616], street: "黑林铺街道" },
+          { name: "高新创客大厦", center: [102.651378, 25.068646], street: "黑林铺街道" },
+          { name: "傲云峰小区", center: [102.653568, 25.067326], street: "黑林铺街道" },
+          { name: "龙润大厦", center: [102.671312, 25.103671], street: "普吉街道" },
+          { name: "高新火炬大厦", center: [102.667052, 25.103701], street: "普吉街道" },
+          { name: "水逸康桥", center: [102.666642, 25.104501], street: "普吉街道" },
+          { name: "昆明恒大名都东区", center: [102.668852, 25.104371], street: "普吉街道" },
+          { name: "昆明恒大名都西区", center: [102.670492, 25.103611], street: "普吉街道" },
+          { name: "大塘二组新村", center: [102.670802, 25.103871], street: "普吉街道" }
+        ]
+      },
+      {
+        name: "盘龙区",
+        color: "#60a5fa",
+        center: [102.742, 25.07],
+        zoom: 13.0,
+        streets: [
+          { name: "金马街道", center: [102.745, 25.0408] },
+          { name: "东华街道", center: [102.735977, 25.055517] },
+          { name: "鼓楼街道", center: [102.721851, 25.051199] },
+          { name: "金辰街道", center: [102.740607, 25.086931] },
+          { name: "联盟街道", center: [102.72276, 25.066901] },
+          { name: "青云街道", center: [102.78081, 25.063019] },
+          { name: "拓东街道", center: [102.724028, 25.041456] },
+          { name: "红云街道", center: [102.723825, 25.11691] },
+          { name: "华山街道", center: [102.704219, 25.055093] },
+          { name: "护国街道", center: [102.710442, 25.042936] }
+        ],
+        communities: [
+          { name: "金色家园北区", center: [102.739087, 25.085111], street: "金辰街道" },
+          { name: "仿江南水乡", center: [102.738987, 25.084201], street: "金辰街道" },
+          { name: "永和府", center: [102.740017, 25.084431], street: "金辰街道" },
+          { name: "金安小区", center: [102.741897, 25.084821], street: "金辰街道" },
+          { name: "彩云间花园", center: [102.743327, 25.084521], street: "金辰街道" },
+          { name: "金玉靓苑", center: [102.737727, 25.085301], street: "金辰街道" },
+          { name: "交警总队家属区", center: [102.739277, 25.085141], street: "金辰街道" },
+          { name: "国际友联", center: [102.740587, 25.086451], street: "金辰街道" },
+          { name: "天怡峰景", center: [102.741277, 25.086671], street: "金辰街道" },
+          { name: "江东花城", center: [102.742607, 25.086781], street: "金辰街道" },
+          { name: "碧水云天(铂金大道)", center: [102.738707, 25.086451], street: "金辰街道" },
+          { name: "四季公寓", center: [102.738787, 25.087161], street: "金辰街道" },
+          { name: "江东花园四季园", center: [102.741417, 25.086641], street: "金辰街道" },
+          { name: "尚都国际", center: [102.740837, 25.087381], street: "金辰街道" },
+          { name: "罗丈村社区", center: [102.742287, 25.087051], street: "金辰街道" },
+          { name: "艾诗林根小区", center: [102.738237, 25.087601], street: "金辰街道" },
+          { name: "温馨家园", center: [102.738907, 25.088391], street: "金辰街道" },
+          { name: "鑫世界西区", center: [102.741237, 25.088721], street: "金辰街道" },
+          { name: "金色家园紫竹园", center: [102.740947, 25.087231], street: "金辰街道" },
+          { name: "金色家园东区", center: [102.743297, 25.088501], street: "金辰街道" },
+          { name: "怡泰A区", center: [102.738927, 25.089271], street: "金辰街道" },
+          { name: "北辰财富中心文化艺术广场", center: [102.738637, 25.089891], street: "金辰街道" },
+          { name: "云福小区", center: [102.739847, 25.089121], street: "金辰街道" },
+          { name: "北辰小区东区", center: [102.742107, 25.088661], street: "金辰街道" },
+          { name: "鸣翠园东区", center: [102.743337, 25.088751], street: "金辰街道" }
+        ]
+      },
+      {
+        name: "官渡区",
+        color: "#fbbf24",
+        center: [102.754, 24.995],
+        zoom: 12.6,
+        streets: [
+          { name: "官渡街道", center: [102.75547, 24.959934] },
+          { name: "阿拉街道", center: [102.788349, 24.998478] },
+          { name: "小板桥街道", center: [102.773, 24.9786] },
+          { name: "关上街道", center: [102.740484, 25.014361] },
+          { name: "六甲街道", center: [102.709, 24.9657] },
+          { name: "太和街道", center: [102.719424, 25.026119] },
+          { name: "吴井街道", center: [102.735219, 25.029279] },
+          { name: "矣六街道", center: [102.788, 24.944] },
+          { name: "福海街道", center: [102.689, 25.0172] },
+          { name: "金碧街道", center: [102.698482, 25.030766] },
+          { name: "前卫街道", center: [102.704231, 24.996676] },
+          { name: "永昌街道", center: [102.704373, 25.019149] }
+        ],
+        communities: [
+          { name: "御浦馨园", center: [102.7699, 24.97645], street: "小板桥街道" },
+          { name: "第三城财富中心", center: [102.77148, 24.97657], street: "小板桥街道" },
+          { name: "世纪浩鸿", center: [102.77316, 24.97689], street: "小板桥街道" },
+          { name: "云路裕庭", center: [102.77485, 24.9764], street: "小板桥街道" },
+          { name: "国际银座C区", center: [102.77559, 24.97648], street: "小板桥街道" },
+          { name: "国际银座B区", center: [102.76988, 24.97752], street: "小板桥街道" },
+          { name: "第三城紫曼园", center: [102.77168, 24.97697], street: "小板桥街道" },
+          { name: "东泰花园西区", center: [102.77206, 24.97735], street: "小板桥街道" },
+          { name: "东泰花园东区", center: [102.77328, 24.97762], street: "小板桥街道" },
+          { name: "第三城丹槿园", center: [102.77625, 24.97665], street: "小板桥街道" },
+          { name: "第三城紫香园", center: [102.77092, 24.97832], street: "小板桥街道" },
+          { name: "富康城紫悦府", center: [102.77204, 24.9789], street: "小板桥街道" },
+          { name: "云峰家园", center: [102.78715, 24.9436], street: "矣六街道" },
+          { name: "广卫新村", center: [102.78854, 24.94466], street: "矣六街道" },
+          { name: "万科魅力之城五期", center: [102.79015, 24.94334], street: "矣六街道" },
+          { name: "万科魅力之城六期", center: [102.78583, 24.9441], street: "矣六街道" },
+          { name: "双城际", center: [102.78735, 24.94506], street: "矣六街道" },
+          { name: "万科魅力之城二四期", center: [102.78786, 24.94599], street: "矣六街道" },
+          { name: "欣景花园馨和园", center: [102.78947, 24.94527], street: "矣六街道" },
+          { name: "欣景花园居安园", center: [102.79083, 24.94501], street: "矣六街道" },
+          { name: "欣景花园永泰园", center: [102.78473, 24.94575], street: "矣六街道" },
+          { name: "金福地花园北区", center: [102.78593, 24.94582], street: "矣六街道" },
+          { name: "金福地花园南区", center: [102.7885, 24.94567], street: "矣六街道" },
+          { name: "海运花园", center: [102.78897, 24.94536], street: "矣六街道" },
+          { name: "俊发彩云城辰湾", center: [102.79048, 24.94505], street: "矣六街道" }
+        ]
+      },
+      {
+        name: "西山区",
+        color: "#34d399",
+        center: [102.665, 25.038],
+        zoom: 12.6,
+        streets: [
+          { name: "大观街道", center: [102.695862, 25.041604] },
+          { name: "华山街道", center: [102.704219, 25.055093] },
+          { name: "龙翔街道", center: [102.687361, 25.052156] },
+          { name: "六甲街道", center: [102.709, 24.9657] },
+          { name: "碧鸡街道", center: [102.6225, 24.985833] },
+          { name: "福海街道", center: [102.689, 25.0172] },
+          { name: "金碧街道", center: [102.698482, 25.030766] },
+          { name: "马街街道", center: [102.635096, 25.026915] },
+          { name: "前卫街道", center: [102.704231, 24.996676] },
+          { name: "西苑街道", center: [102.666169, 25.043403] },
+          { name: "永昌街道", center: [102.704373, 25.019149] },
+          { name: "棕树营街道", center: [102.677777, 25.039871] }
+        ],
+        communities: [
+          { name: "昆明滇池高尔夫别墅北区", center: [102.701741, 24.994966], street: "前卫街道" },
+          { name: "滇池卫城悦湖郡", center: [102.703551, 24.994956], street: "前卫街道" },
+          { name: "滇池卫城紫园", center: [102.704511, 24.994416], street: "前卫街道" },
+          { name: "滇池卫城蓝湾", center: [102.705241, 24.993956], street: "前卫街道" },
+          { name: "滇池卫城蓝谷", center: [102.706311, 24.993766], street: "前卫街道" },
+          { name: "滇池卫城蓝港", center: [102.701361, 24.995346], street: "前卫街道" },
+          { name: "海埂悦府", center: [102.703261, 24.995626], street: "前卫街道" },
+          { name: "滇池卫城紫庐", center: [102.704521, 24.996016], street: "前卫街道" },
+          { name: "滇池卫城蓝域晴天", center: [102.705891, 24.996286], street: "前卫街道" },
+          { name: "滇池卫城橡树庄园", center: [102.706291, 24.995046], street: "前卫街道" },
+          { name: "滇池卫城蓝调公元", center: [102.701221, 24.996076], street: "前卫街道" },
+          { name: "滇池卫城微风岛", center: [102.703981, 24.996336], street: "前卫街道" },
+          { name: "滇池卫城鹿港", center: [102.704071, 24.997406], street: "前卫街道" },
+          { name: "滇池卫城橡尚", center: [102.705151, 24.997136], street: "前卫街道" },
+          { name: "滇池印象花园", center: [102.707021, 24.995876], street: "前卫街道" },
+          { name: "滇池卫城滟澜湾", center: [102.700981, 24.996896], street: "前卫街道" },
+          { name: "滇池卫城尚层", center: [102.703911, 24.996776], street: "前卫街道" },
+          { name: "滇池卫城铂睿", center: [102.703411, 24.996816], street: "前卫街道" },
+          { name: "筑友玺珑湾", center: [102.704901, 24.997406], street: "前卫街道" },
+          { name: "滇池卫城锦尚", center: [102.706631, 24.996686], street: "前卫街道" },
+          { name: "大自然风情园", center: [102.701571, 24.998536], street: "前卫街道" },
+          { name: "金海新区一期", center: [102.703121, 24.998326], street: "前卫街道" },
+          { name: "金海新区2期", center: [102.703861, 24.999656], street: "前卫街道" },
+          { name: "平和花园", center: [102.705751, 24.999156], street: "前卫街道" },
+          { name: "泊岸澜庭", center: [102.707441, 24.998166], street: "前卫街道" }
+        ]
+      },
+      {
+        name: "呈贡区",
+        color: "#fb7185",
+        center: [102.821, 24.889],
+        zoom: 12.8,
+        streets: [
+          { name: "洛龙街道", center: [102.827306, 24.885971] },
+          { name: "龙城街道", center: [102.796283, 24.891439] },
+          { name: "矣六街道", center: [102.788, 24.944] },
+          { name: "斗南街道", center: [102.79, 24.9134] },
+          { name: "洛羊街道", center: [102.807, 24.9298] },
+          { name: "乌龙街道", center: [102.820425, 24.888488] }
+        ],
+        communities: [
+          { name: "兴冶国际A区", center: [102.794853, 24.889109], street: "龙城街道" },
+          { name: "兴锦嘉园", center: [102.794973, 24.889799], street: "龙城街道" },
+          { name: "花都时区", center: [102.796503, 24.889639], street: "龙城街道" },
+          { name: "殷实家园", center: [102.79025, 24.91225], street: "斗南街道" },
+          { name: "七彩人家小区", center: [102.798913, 24.888759], street: "龙城街道" },
+          { name: "城内回族新村", center: [102.794313, 24.890419], street: "龙城街道" },
+          { name: "文笔小区", center: [102.795563, 24.891169], street: "龙城街道" },
+          { name: "呈贡信合大厦", center: [102.797263, 24.890749], street: "龙城街道" },
+          { name: "呈贡老街", center: [102.797983, 24.890809], street: "龙城街道" },
+          { name: "呈贡区中医院住宅小区", center: [102.799593, 24.890809], street: "龙城街道" },
+          { name: "绿地东海岸", center: [102.793433, 24.891139], street: "龙城街道" },
+          { name: "绿地东海岸海逸名苑", center: [102.795313, 24.891509], street: "龙城街道" },
+          { name: "七彩云南第壹城社区祥璟苑", center: [102.820225, 24.888038], street: "乌龙街道" },
+          { name: "七彩云南第壹城社区晨璟苑", center: [102.821845, 24.889168], street: "乌龙街道" },
+          { name: "七彩云南第壹城社区橙香苑", center: [102.821845, 24.888408], street: "乌龙街道" },
+          { name: "七彩云南第壹城时代广场", center: [102.818465, 24.888928], street: "乌龙街道" },
+          { name: "上海东盟商务大厦", center: [102.818665, 24.890358], street: "乌龙街道" },
+          { name: "惠兰园", center: [102.821245, 24.888708], street: "乌龙街道" },
+          { name: "米兰园", center: [102.798293, 24.891819], street: "龙城街道" },
+          { name: "置信银河广场", center: [102.799653, 24.893389], street: "龙城街道" },
+          { name: "昆明炬豪中心", center: [102.825116, 24.888581], street: "洛龙街道" },
+          { name: "通信大厦", center: [102.795293, 24.893649], street: "龙城街道" },
+          { name: "吾悦首府西区", center: [102.826456, 24.887371], street: "洛龙街道" },
+          { name: "吾悦首府东区", center: [102.828406, 24.888701], street: "洛龙街道" },
+          { name: "花香满径", center: [102.828726, 24.887471], street: "洛龙街道" }
+        ]
+      },
+      {
+        name: "安宁市",
+        color: "#a3e635",
+        center: [102.478, 24.919],
+        zoom: 12.4,
+        streets: [
+          { name: "太平新城街道", center: [102.478262, 24.918575] },
+          { name: "金方街道", center: [102.477587, 24.91955] }
+        ],
+        communities: [
+          { name: "和谐家园(安宁市)", center: [102.476842, 24.916385], street: "太平新城街道" },
+          { name: "融创雁来湖小镇清风雅苑", center: [102.476207, 24.91853], street: "金方街道" },
+          { name: "恒大金碧天下二期天泽苑", center: [102.477612, 24.916065], street: "太平新城街道" },
+          { name: "恒大金碧天下二期雍秀苑", center: [102.478747, 24.91815], street: "金方街道" },
+          { name: "建投璞御", center: [102.479067, 24.9172], street: "金方街道" },
+          { name: "恒大金碧天下二期翠堤苑", center: [102.474217, 24.91778], street: "金方街道" },
+          { name: "恒大金碧天下二期爵府苑", center: [102.475617, 24.91923], street: "金方街道" },
+          { name: "恒大金碧天下一期", center: [102.477327, 24.91896], street: "金方街道" },
+          { name: "吾悦海悦西山", center: [102.477997, 24.91912], street: "金方街道" },
+          { name: "俊发玉龙湾松云雅苑", center: [102.481602, 24.918415], street: "太平新城街道" },
+          { name: "蓝光云报芙蓉园", center: [102.475922, 24.919215], street: "太平新城街道" },
+          { name: "玉龙湾长顺岭", center: [102.477277, 24.92025], street: "金方街道" },
+          { name: "俊发玉龙湾林泉雅苑", center: [102.477587, 24.92033], street: "金方街道" },
+          { name: "山语锦苑A区", center: [102.480032, 24.917775], street: "太平新城街道" },
+          { name: "云报记者村尚居", center: [102.481292, 24.919445], street: "太平新城街道" },
+          { name: "云报记者村尚筑", center: [102.475672, 24.920355], street: "太平新城街道" },
+          { name: "锦康富春山居", center: [102.477852, 24.919865], street: "太平新城街道" },
+          { name: "天籁郡揽翠庭", center: [102.478092, 24.920385], street: "太平新城街道" },
+          { name: "金地自在城", center: [102.479932, 24.919895], street: "太平新城街道" },
+          { name: "滇峰家园", center: [102.480392, 24.919395], street: "太平新城街道" },
+          { name: "盈科苹果城", center: [102.475232, 24.920745], street: "太平新城街道" },
+          { name: "云锡奥城", center: [102.476742, 24.919665], street: "太平新城街道" },
+          { name: "融创山水融城", center: [102.478432, 24.920885], street: "太平新城街道" },
+          { name: "华夏澜山悦", center: [102.479132, 24.920095], street: "太平新城街道" },
+          { name: "锦康富春御园", center: [102.480842, 24.921165], street: "太平新城街道" }
+        ]
+      },
+      {
+        name: "晋宁区",
+        color: "#38bdf8",
+        center: [102.595, 24.67],
+        zoom: 12.0,
+        streets: [
+          { name: "晋城街道", center: [102.594562, 24.669438] },
+          { name: "昆阳街道", center: [102.595375, 24.6705] }
+        ],
+        communities: [
+          { name: "华侨城公园悦府", center: [102.592632, 24.667708], street: "晋城街道" },
+          { name: "锦绣竹园", center: [102.593022, 24.666618], street: "晋城街道" },
+          { name: "海伦堡晋云府", center: [102.593972, 24.666768], street: "晋城街道" },
+          { name: "海伦堡天澜花园", center: [102.595132, 24.667418], street: "晋城街道" },
+          { name: "湖畔榕园", center: [102.597272, 24.666858], street: "晋城街道" },
+          { name: "锦绣园", center: [102.591472, 24.668688], street: "晋城街道" },
+          { name: "荷风香舍", center: [102.593502, 24.668198], street: "晋城街道" },
+          { name: "风和日丽北区", center: [102.594982, 24.668218], street: "晋城街道" },
+          { name: "迎新小区", center: [102.595012, 24.667608], street: "晋城街道" },
+          { name: "益州社区", center: [102.596902, 24.668398], street: "晋城街道" },
+          { name: "龙源鎏金", center: [102.592702, 24.669398], street: "晋城街道" },
+          { name: "龙祥园小区2期", center: [102.592592, 24.669088], street: "晋城街道" },
+          { name: "龙祥园小区1期", center: [102.594492, 24.668858], street: "晋城街道" },
+          { name: "益景花园", center: [102.595182, 24.668478], street: "晋城街道" },
+          { name: "豪城望景", center: [102.596192, 24.668638], street: "晋城街道" },
+          { name: "中国云南欣城", center: [102.591462, 24.670698], street: "晋城街道" },
+          { name: "安居家园(晋宁)", center: [102.594435, 24.67156], street: "昆阳街道" },
+          { name: "荣合金岸", center: [102.595695, 24.67249], street: "昆阳街道" },
+          { name: "吾悦公馆", center: [102.596615, 24.67098], street: "昆阳街道" },
+          { name: "中铁财富广场", center: [102.598555, 24.67173], street: "昆阳街道" },
+          { name: "磷都花园", center: [102.593435, 24.67344], street: "昆阳街道" },
+          { name: "和泰嘉园招商依云郡", center: [102.594955, 24.6723], street: "昆阳街道" },
+          { name: "欣达世界城", center: [102.596135, 24.67172], street: "昆阳街道" },
+          { name: "磷都小区", center: [102.597305, 24.67199], street: "昆阳街道" },
+          { name: "东门小区", center: [102.596905, 24.67299], street: "昆阳街道" }
+        ]
+      },
+      {
+        name: "金江路样板",
+        color: "#fcd34d",
+        center: [102.71471, 25.07640],
+        zoom: 16.4,
+        sample: true,
+        streets: [
+          { name: "联盟街道", center: [102.72276, 25.066901] }
+        ],
+        communities: []
+      }
+    ];
+
+    function placesOf(district) {
+      const streets = (district.streets || []).map((p) => ({ ...p, type: "street" }));
+      const communities = (district.communities || []).map((p) => ({ ...p, type: "community" }));
+      return streets.concat(communities);
+    }
+
+    let activeDistrict = null;
+    let activeCommunityName = null;
+    const buildingsByDistrict = {};
+    const areaCommunityMarkers = [];
+
+    const OVERPASS_ENDPOINTS = [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter"
+    ];
+
+    let selectedId = null;
+    let popup = null;
+    let currentBasemap = "satellite";
+    let eventsBound = false;
+    let loadToken = 0;
+    let debounceTimer = null;
+    let localBuildings = null;
+    const districtMarkers = [];
+    // activeDistrict / areaCommunityMarkers 已在上方声明
+
+    const BASEMAP_TILES = {
+      satellite: {
+        tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+        attribution: "Tiles © Esri",
+        paint: { "raster-saturation": 0, "raster-contrast": 0, "raster-brightness-min": 0, "raster-brightness-max": 1 }
+      },
+      // 深色：Carto Dark（昆明瓦片实测可拉取）；备援 Esri Dark Gray
+      dark: {
+        tiles: [
+          "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+        ],
+        attribution: "© CARTO · © OSM · Esri",
+        paint: { "raster-saturation": 0, "raster-contrast": 0.08, "raster-brightness-min": 0, "raster-brightness-max": 1 }
+      },
+      // 浅色：高德矢量路网（中文注记，昆明实测可拉取）；备援 Carto Light
+      light: {
+        tiles: [
+          "https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}",
+          "https://webrd02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}",
+          "https://webrd03.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}",
+          "https://webrd04.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}",
+          "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
+        ],
+        attribution: "© 高德地图 · © CARTO",
+        paint: { "raster-saturation": -0.05, "raster-contrast": 0.05, "raster-brightness-min": 0.05, "raster-brightness-max": 1 }
+      }
+    };
+
+    const map = new maplibregl.Map({
+      container: "map",
+      style: {
+        version: 8,
+        glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+        sources: {
+          basemap: {
+            type: "raster",
+            tiles: BASEMAP_TILES.satellite.tiles,
+            tileSize: 256,
+            attribution: BASEMAP_TILES.satellite.attribution
+          }
+        },
+        layers: [{
+          id: "basemap",
+          type: "raster",
+          source: "basemap",
+          paint: BASEMAP_TILES.satellite.paint
+        }]
+      },
+      center: CITY_CENTER,
+      zoom: 11.2,
+      pitch: 35,
+      bearing: -12,
+      maxPitch: 85,
+      antialias: true
+    });
+
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    popup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, offset: 18, maxWidth: "260px" });
+
+    function setStatus(text) {
+      document.getElementById("status").textContent = text;
+    }
+
+    function setMode(text) {
+      document.getElementById("mode").textContent = text;
+      const meta = document.getElementById("panel-toggle-meta");
+      if (meta) meta.textContent = text || "点开选择区县";
+    }
+
+    function isMobileLayout() {
+      return window.matchMedia("(max-width: 768px)").matches;
+    }
+
+    function setPanelExpanded(expanded) {
+      const panel = document.getElementById("panel");
+      const btn = document.getElementById("panel-toggle");
+      if (!panel) return;
+      panel.classList.toggle("collapsed", !expanded);
+      if (btn) btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+      // 面板高度变化后刷新地图尺寸
+      requestAnimationFrame(() => {
+        try { map.resize(); } catch (_) {}
+      });
+    }
+
+    function bindPanelUi() {
+      const panel = document.getElementById("panel");
+      const btn = document.getElementById("panel-toggle");
+      if (!panel || !btn) return;
+
+      btn.addEventListener("click", () => {
+        setPanelExpanded(panel.classList.contains("collapsed"));
+      });
+
+      // 拖动手柄区域也可切换
+      const handle = panel.querySelector(".panel-handle");
+      if (handle) {
+        handle.addEventListener("click", () => {
+          setPanelExpanded(panel.classList.contains("collapsed"));
+        });
+      }
+
+      const mq = window.matchMedia("(max-width: 768px)");
+      const sync = () => {
+        if (mq.matches) setPanelExpanded(false);
+        else {
+          panel.classList.remove("collapsed");
+          if (btn) btn.setAttribute("aria-expanded", "true");
+        }
+      };
+      if (mq.addEventListener) mq.addEventListener("change", sync);
+      else mq.addListener(sync);
+      sync();
+    }
+
+    function updateStats(features) {
+      document.getElementById("count").textContent = String(features.length);
+      if (!features.length) {
+        document.getElementById("range").textContent = "—";
+        return;
+      }
+      const heights = features.map((f) => Number(f.properties.height) || 0);
+      document.getElementById("range").textContent =
+        `${Math.min(...heights).toFixed(0)} – ${Math.max(...heights).toFixed(0)} m`;
+    }
+
+    function normalizeName(s) {
+      return String(s || "")
+        .toLowerCase()
+        .replace(/園/g, "园").replace(/華/g, "华").replace(/號/g, "号")
+        .replace(/廣/g, "广").replace(/場/g, "场").replace(/濱/g, "滨")
+        .replace(/鴻/g, "鸿").replace(/興/g, "兴").replace(/裡/g, "里")
+        .replace(/裏/g, "里").replace(/灣/g, "湾").replace(/東/g, "东")
+        .replace(/頤/g, "颐").replace(/贏/g, "赢").replace(/樓/g, "楼")
+        .replace(/區/g, "区").replace(/縣/g, "县").replace(/寧/g, "宁")
+        .replace(/晉/g, "晋").replace(/貢/g, "贡")
+        .replace(/\s+/g, "");
+    }
+
+    function allCommunityFeatures() {
+      const features = [];
+      DISTRICTS.forEach((d) => {
+        placesOf(d).forEach((c) => {
+          features.push({
+            type: "Feature",
+            properties: {
+              community: c.name,
+              count: c.type === "street" ? "街道" : (c.count ? `${c.count}栋` : "小区"),
+              kind: c.type === "street" ? "street" : "community",
+              district: d.name,
+              sample: !!d.sample
+            },
+            geometry: { type: "Point", coordinates: c.center }
+          });
+        });
+      });
+      return features;
+    }
+
+    function searchIndex() {
+      const districts = DISTRICTS.map((d) => ({
+        type: "Feature",
+        properties: {
+          community: d.name,
+          count: d.sample ? "样板" : "区县",
+          kind: "district",
+          zoom: d.zoom,
+          sample: !!d.sample
+        },
+        geometry: { type: "Point", coordinates: d.center }
+      }));
+      return { type: "FeatureCollection", features: districts.concat(allCommunityFeatures()) };
+    }
+
+    async function focusCommunityInDistrict(districtName, communityName) {
+      const d = DISTRICTS.find((x) => x.name === districtName);
+      if (!d) return;
+      ensureCommunityCounts(d);
+      const c = placesOf(d).find((x) => x.name === communityName);
+      if (!c) return;
+      selectDistrict(d, { fly: false, keepList: true });
+      activeCommunityName = c.name;
+      renderCommunityList(d);
+      showAreaCommunityMarkers(d);
+      highlightAreaMarkers(c.name);
+      document.getElementById("picked").textContent = c.name;
+      clearSelection();
+      const kindLabel = c.type === "street" ? "街道" : "小区";
+      const countTxt = Number(c.count) > 0 ? ` · ${c.count} 栋` : "";
+      popup
+        .setLngLat(c.center)
+        .setHTML(
+          `<div class="popup-community" style="color:${d.color}">${c.name}</div>` +
+          `<div class="popup-meta">${d.name} · ${kindLabel}` +
+          countTxt +
+          (c.street ? `<br/>所属街道：${c.street}` : "") +
+          `</div>`
+        )
+        .addTo(map);
+      map.easeTo({
+        center: c.center,
+        zoom: d.sample ? 16.6 : (c.type === "street" ? 15.4 : 16.2),
+        pitch: 55,
+        duration: 900
+      });
+      loadDistrictBuildings(d, c);
+    }
+
+    function focusPlace(feature) {
+      if (!feature) return;
+      const name = feature.properties.community;
+      const kind = feature.properties.kind;
+      if (kind === "district") {
+        const d = DISTRICTS.find((x) => x.name === name);
+        if (d) selectDistrict(d, { fly: true });
+        return;
+      }
+      if (kind === "community" || kind === "street") {
+        focusCommunityInDistrict(feature.properties.district, name);
+      }
+    }
+
+    function clearAreaCommunityMarkers() {
+      areaCommunityMarkers.forEach((m) => m.remove());
+      areaCommunityMarkers.length = 0;
+    }
+
+    function highlightAreaMarkers(name) {
+      areaCommunityMarkers.forEach((m) => {
+        const el = m.getElement();
+        el.classList.toggle("active-community", el.dataset.name === name);
+      });
+      document.querySelectorAll("#community-list button").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.name === name);
+      });
+    }
+
+    function showAreaCommunityMarkers(district) {
+      // 地图标注：小区名 + 栋数
+      clearAreaCommunityMarkers();
+      (district.communities || []).forEach((c) => {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "community-marker";
+        const count = Number(c.count) > 0 ? Number(c.count) : null;
+        el.innerHTML =
+          `<span class="mk-name">${c.name}</span>` +
+          (count != null ? `<span class="mk-count">${count} 栋</span>` : "");
+        el.dataset.name = c.name;
+        el.title =
+          `${district.name} · 小区 · ${c.name}` +
+          (c.street ? `（${c.street}）` : "") +
+          (count != null ? ` · ${count}栋` : "") +
+          (c.countSource === "osm" ? " · OSM统计" : c.countSource === "sample" ? " · 样板" : "");
+        el.style.borderColor = district.color;
+        el.style.color = district.color;
+        el.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          focusCommunityInDistrict(district.name, c.name);
+        });
+        areaCommunityMarkers.push(
+          new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(c.center).addTo(map)
+        );
+      });
+    }
+
+    function renderPlaceButtons(items, typeLabel) {
+      return items.map((c) => {
+        let meta = typeLabel;
+        if (Number(c.count) > 0) meta = `${c.count} 栋`;
+        else if (c.street) meta = c.street;
+        const active = c.name === activeCommunityName ? "active" : "";
+        return `<button type="button" class="${active}" data-name="${c.name}"><b>${c.name}</b><span>${meta}</span></button>`;
+      }).join("");
+    }
+
+    function renderCommunityList(district) {
+      const panel = document.getElementById("community-panel");
+      const list = document.getElementById("community-list");
+      const title = document.getElementById("community-panel-title");
+      const countEl = document.getElementById("community-panel-count");
+      const streets = district.streets || [];
+      const communities = district.communities || [];
+      const total = streets.length + communities.length;
+      panel.classList.add("show");
+      panel.style.borderColor = district.color + "66";
+      title.innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${district.color};margin-right:6px;"></span>${district.name}`;
+      countEl.textContent = `${streets.length} 街 / ${communities.length} 小区`;
+      if (!total) {
+        list.innerHTML = `<div class="empty">该区域暂无数据</div>`;
+        return;
+      }
+      list.innerHTML =
+        (streets.length ? `<div class="section-label">街道</div>${renderPlaceButtons(streets, "街道")}` : "") +
+        (communities.length ? `<div class="section-label">小区</div>${renderPlaceButtons(communities, "小区")}` : "");
+      list.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          focusCommunityInDistrict(district.name, btn.dataset.name);
+        });
+      });
+    }
+
+    function communityBBox(district, pad = 0.012) {
+      const pts = (district.communities && district.communities.length
+        ? district.communities
+        : placesOf(district)
+      ).map((c) => c.center);
+      if (!pts.length) {
+        const [lon, lat] = district.center;
+        return [lon - pad, lat - pad, lon + pad, lat + pad];
+      }
+      const lons = pts.map((p) => p[0]);
+      const lats = pts.map((p) => p[1]);
+      return [
+        Math.min(...lons) - pad,
+        Math.min(...lats) - pad,
+        Math.max(...lons) + pad,
+        Math.max(...lats) + pad
+      ];
+    }
+
+    async function hydrateSampleCommunities() {
+      const sample = DISTRICTS.find((d) => d.sample);
+      if (!sample || (sample.communities && sample.communities.length)) return;
+      try {
+        const res = await fetch("./communities.geojson?v=4");
+        if (!res.ok) return;
+        const geo = await res.json();
+        sample.communities = (geo.features || []).map((f) => ({
+          name: f.properties.community,
+          center: f.geometry.coordinates,
+          count: f.properties.count,
+          countSource: "sample"
+        }));
+        sample._countsReady = true;
+      } catch (_) {}
+    }
+
+    function paintFeatures(geo, district) {
+      const color = district.color || BUILDING_COLOR;
+      return {
+        type: "FeatureCollection",
+        features: (geo.features || []).map((f) => ({
+          ...f,
+          properties: {
+            ...f.properties,
+            color,
+            district: district.name
+          }
+        }))
+      };
+    }
+
+    // 稳定伪随机：同一小区每次生成相同楼栋布局
+    function hashSeed(str) {
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
+
+    function mulberry32(a) {
+      return function () {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+
+    function estimateDemoCount(name) {
+      const h = hashSeed(String(name || "x"));
+      return 6 + (h % 19); // 6–24
+    }
+
+    function haversineM(a, b) {
+      const toRad = (d) => (d * Math.PI) / 180;
+      const R = 6371000;
+      const dLat = toRad(b[1] - a[1]);
+      const dLon = toRad(b[0] - a[0]);
+      const lat1 = toRad(a[1]);
+      const lat2 = toRad(b[1]);
+      const h =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    async function overpassJson(query, timeoutMs = 8000) {
+      let lastErr = null;
+      for (const url of OVERPASS_ENDPOINTS) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: "data=" + encodeURIComponent(query),
+            signal: ctrl.signal
+          });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return await res.json();
+        } catch (err) {
+          lastErr = err;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      throw lastErr || new Error("Overpass failed");
+    }
+
+    async function fetchOsmBuildingCounts(district) {
+      const communities = district.communities || [];
+      if (!communities.length) return false;
+      const bbox = communityBBox(district, 0.004);
+      const [west, south, east, north] = bbox;
+      const query =
+        `[out:json][timeout:20];` +
+        `way["building"](${south},${west},${north},${east});` +
+        `out center;`;
+      const osm = await overpassJson(query, 8000);
+      const pts = [];
+      for (const el of osm.elements || []) {
+        if (el.type !== "way" || !el.center) continue;
+        pts.push([el.center.lon, el.center.lat]);
+      }
+      if (!pts.length) return false;
+
+      const counts = communities.map(() => 0);
+      const MAX_M = district.sample ? 220 : 280;
+      pts.forEach((p) => {
+        let best = -1;
+        let bestD = Infinity;
+        communities.forEach((c, i) => {
+          const d = haversineM(p, c.center);
+          if (d < bestD) {
+            bestD = d;
+            best = i;
+          }
+        });
+        if (best >= 0 && bestD <= MAX_M) counts[best] += 1;
+      });
+
+      let hit = 0;
+      communities.forEach((c, i) => {
+        if (counts[i] > 0) {
+          c.count = counts[i];
+          c.countSource = "osm";
+          hit += 1;
+        }
+      });
+      return hit > 0;
+    }
+
+    function fillDemoCounts(district) {
+      (district.communities || []).forEach((c) => {
+        if (!(Number(c.count) > 0)) {
+          c.count = estimateDemoCount(c.name);
+          c.countSource = "demo";
+        } else if (!c.countSource) {
+          c.countSource = district.sample ? "sample" : "known";
+        }
+      });
+    }
+
+    // 先本地填栋数保证可点开；OSM 统计后台刷新，不阻塞 UI
+    async function ensureCommunityCounts(district) {
+      if (!district || district._countsReady) return;
+      const communities = district.communities || [];
+      if (!communities.length) {
+        district._countsReady = true;
+        return;
+      }
+
+      fillDemoCounts(district);
+      district._countsReady = true;
+
+      const needOsm = communities.some((c) => c.countSource === "demo");
+      if (!needOsm) return;
+
+      // 后台升级栋数，失败就保持 demo
+      fetchOsmBuildingCounts(district)
+        .then((ok) => {
+          if (!ok || activeDistrict !== district) return;
+          // 清掉该区建筑缓存，按新栋数重绘
+          Object.keys(buildingsByDistrict).forEach((k) => {
+            if (k === district.name || k.startsWith(district.name + "::")) {
+              delete buildingsByDistrict[k];
+            }
+          });
+          showAreaCommunityMarkers(district);
+          renderCommunityList(district);
+          if (activeCommunityName) highlightAreaMarkers(activeCommunityName);
+          loadDistrictBuildings(district, activeCommunityName
+            ? placesOf(district).find((p) => p.name === activeCommunityName)
+            : null);
+          setStatus(`${district.name} · 栋数已用 OSM 更新`);
+        })
+        .catch((err) => {
+          console.warn("栋数抓取失败，沿用 Demo", err);
+        });
+    }
+
+    function rectPolygon(lon, lat, wDeg, hDeg, rot) {
+      const cos = Math.cos(rot);
+      const sin = Math.sin(rot);
+      const corners = [
+        [-wDeg / 2, -hDeg / 2],
+        [wDeg / 2, -hDeg / 2],
+        [wDeg / 2, hDeg / 2],
+        [-wDeg / 2, hDeg / 2],
+        [-wDeg / 2, -hDeg / 2]
+      ];
+      return corners.map(([dx, dy]) => {
+        const x = dx * cos - dy * sin;
+        const y = dx * sin + dy * cos;
+        return [lon + x, lat + y];
+      });
+    }
+
+    function irregularFootprint(clon, clat, w, h, rand, rot) {
+      // 略不规则的小区地块轮廓（近似封闭地块）
+      const cos = Math.cos(rot);
+      const sin = Math.sin(rot);
+      const ring = [];
+      const steps = 8;
+      for (let i = 0; i <= steps; i++) {
+        const t = (i % steps) / steps * Math.PI * 2;
+        const bulge = 0.82 + rand() * 0.28;
+        const dx = Math.cos(t) * (w / 2) * bulge;
+        const dy = Math.sin(t) * (h / 2) * bulge;
+        // 压成更方的地块
+        const sx = dx * (0.75 + 0.25 * Math.abs(Math.cos(t)));
+        const sy = dy * (0.75 + 0.25 * Math.abs(Math.sin(t)));
+        const x = sx * cos - sy * sin;
+        const y = sx * sin + sy * cos;
+        ring.push([clon + x, clat + y]);
+      }
+      return ring;
+    }
+
+    function pushBuilding(features, id, place, district, lon, lat, w, h, rot, levels) {
+      features.push({
+        type: "Feature",
+        properties: {
+          id,
+          name: `${place.name}-楼栋`,
+          community: place.name,
+          placeType: place.type || "community",
+          district: district.name,
+          color: district.color,
+          height: levels * LEVEL_HEIGHT,
+          levels
+        },
+        geometry: {
+          type: "Polygon",
+          coordinates: [rectPolygon(lon, lat, w, h, rot)]
+        }
+      });
+    }
+
+    // 按小区形态布局：围合庭院 / 行列式 / U 形；街道用条带
+    function makeDemoBuildingsForPlace(place, district, idBase) {
+      const rand = mulberry32(hashSeed(district.name + "::" + place.name));
+      const isStreet = place.type === "street";
+      const [clon, clat] = place.center;
+      const features = [];
+      const rot = (rand() - 0.5) * 0.35;
+      const cos = Math.cos(rot);
+      const sin = Math.sin(rot);
+
+      function localToLonLat(lx, ly) {
+        return [clon + lx * cos - ly * sin, clat + lx * sin + ly * cos];
+      }
+
+      let footprint;
+      let n = 0;
+
+      if (isStreet) {
+        // 街道：沿一条主轴的条带楼栋
+        const length = 0.0018 + rand() * 0.0012;
+        const width = 0.00055 + rand() * 0.00025;
+        footprint = irregularFootprint(clon, clat, length, width, rand, rot);
+        const count = 7 + Math.floor(rand() * 5);
+        for (let i = 0; i < count; i++) {
+          const t = (i + 0.5) / count - 0.5;
+          const [lon, lat] = localToLonLat(t * length * 0.85, (rand() - 0.5) * width * 0.25);
+          const w = 0.00014 + rand() * 0.00012;
+          const h = 0.00011 + rand() * 0.00008;
+          const levels = 4 + Math.floor(rand() * 7);
+          n += 1;
+          pushBuilding(features, idBase + n, place, district, lon, lat, w, h, rot + (rand() - 0.5) * 0.1, levels);
+        }
+      } else {
+        // 小区：三种常见形态
+        const morph = Math.floor(rand() * 3); // 0 围合 1 行列 2 U形
+        const siteW = 0.00135 + rand() * 0.0009;
+        const siteH = 0.00115 + rand() * 0.0008;
+        footprint = irregularFootprint(clon, clat, siteW, siteH, rand, rot);
+        const bw = 0.00016 + rand() * 0.0001;
+        const bh = 0.00012 + rand() * 0.00008;
+
+        if (morph === 0) {
+          // 围合庭院：四边排布
+          const sides = [
+            { dir: "n", count: 3 + Math.floor(rand() * 2) },
+            { dir: "s", count: 3 + Math.floor(rand() * 2) },
+            { dir: "e", count: 2 + Math.floor(rand() * 2) },
+            { dir: "w", count: 2 + Math.floor(rand() * 2) }
+          ];
+          sides.forEach((side) => {
+            for (let i = 0; i < side.count; i++) {
+              const t = (i + 0.5) / side.count - 0.5;
+              let lx = 0;
+              let ly = 0;
+              let bRot = rot;
+              if (side.dir === "n") { lx = t * siteW * 0.72; ly = siteH * 0.34; bRot = rot; }
+              if (side.dir === "s") { lx = t * siteW * 0.72; ly = -siteH * 0.34; bRot = rot; }
+              if (side.dir === "e") { lx = siteW * 0.34; ly = t * siteH * 0.55; bRot = rot + Math.PI / 2; }
+              if (side.dir === "w") { lx = -siteW * 0.34; ly = t * siteH * 0.55; bRot = rot + Math.PI / 2; }
+              const [lon, lat] = localToLonLat(lx, ly);
+              const levels = 8 + Math.floor(rand() * 14);
+              n += 1;
+              pushBuilding(features, idBase + n, place, district, lon, lat, bw, bh, bRot, levels);
+            }
+          });
+          // 中心会所/矮楼
+          const [lon, lat] = localToLonLat((rand() - 0.5) * siteW * 0.1, (rand() - 0.5) * siteH * 0.1);
+          n += 1;
+          pushBuilding(features, idBase + n, place, district, lon, lat, bw * 1.3, bh * 1.1, rot, 3 + Math.floor(rand() * 3));
+        } else if (morph === 1) {
+          // 行列式
+          const rows = 3 + Math.floor(rand() * 2);
+          const cols = 3 + Math.floor(rand() * 2);
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              if (rand() < 0.08) continue;
+              const lx = ((c + 0.5) / cols - 0.5) * siteW * 0.78;
+              const ly = ((r + 0.5) / rows - 0.5) * siteH * 0.78;
+              const [lon, lat] = localToLonLat(lx, ly);
+              const levels = 10 + Math.floor(rand() * 12);
+              n += 1;
+              pushBuilding(features, idBase + n, place, district, lon, lat, bw * 1.35, bh * 0.85, rot, levels);
+            }
+          }
+        } else {
+          // U 形开口
+          const open = Math.floor(rand() * 4); // 0北开 1东 2南 3西
+          const slots = [];
+          for (let i = 0; i < 4; i++) {
+            for (let j = 0; j < 3; j++) {
+              const t = (j + 0.5) / 3 - 0.5;
+              if (i === 0 && open !== 0) slots.push([t * siteW * 0.7, siteH * 0.32, rot]);
+              if (i === 1 && open !== 1) slots.push([siteW * 0.32, t * siteH * 0.55, rot + Math.PI / 2]);
+              if (i === 2 && open !== 2) slots.push([t * siteW * 0.7, -siteH * 0.32, rot]);
+              if (i === 3 && open !== 3) slots.push([-siteW * 0.32, t * siteH * 0.55, rot + Math.PI / 2]);
+            }
+          }
+          slots.forEach(([lx, ly, bRot]) => {
+            const [lon, lat] = localToLonLat(lx, ly);
+            const levels = 9 + Math.floor(rand() * 13);
+            n += 1;
+            pushBuilding(features, idBase + n, place, district, lon, lat, bw, bh, bRot, levels);
+          });
+        }
+
+        // 按栋数补足/截断到目标
+        const target = place.count
+          ? Math.max(4, Math.min(Number(place.count), 40))
+          : n;
+        while (n < target) {
+          const lx = (rand() - 0.5) * siteW * 0.55;
+          const ly = (rand() - 0.5) * siteH * 0.55;
+          const [lon, lat] = localToLonLat(lx, ly);
+          n += 1;
+          pushBuilding(features, idBase + n, place, district, lon, lat, bw * 0.9, bh * 0.9, rot, 8 + Math.floor(rand() * 10));
+        }
+        if (features.length > target) features.length = target;
+      }
+
+      if (place.type !== "street" && Number(place.count) > 0) {
+        // 标注用栋数与生成楼栋对齐
+        place.count = features.length;
+      }
+
+      const labelFeature = {
+        type: "Feature",
+        properties: {
+          name: place.name,
+          placeType: place.type || "community",
+          district: district.name,
+          color: district.color,
+          buildingCount: Number(place.count) || features.length
+        },
+        geometry: { type: "Point", coordinates: [clon, clat] }
+      };
+
+      const footprintFeature = {
+        type: "Feature",
+        properties: {
+          name: place.name,
+          placeType: place.type || "community",
+          district: district.name,
+          color: district.color,
+          buildingCount: Number(place.count) || features.length
+        },
+        geometry: { type: "Polygon", coordinates: [footprint] }
+      };
+
+      return { buildings: features, footprint: footprintFeature, label: labelFeature };
+    }
+
+    function buildDemoBuildings(district, focusPlace) {
+      // 默认只为真实小区生成形态；点中街道时才画该街道条带
+      const places = focusPlace
+        ? [focusPlace]
+        : (district.communities || []).map((p) => ({ ...p, type: "community" }));
+      let idBase = hashSeed(district.name) % 1000000;
+      const buildings = [];
+      const footprints = [];
+      const labels = [];
+      places.forEach((p, idx) => {
+        const chunk = makeDemoBuildingsForPlace(p, district, idBase + idx * 200);
+        buildings.push(...chunk.buildings);
+        footprints.push(chunk.footprint);
+        labels.push(chunk.label);
+      });
+      return {
+        buildings: { type: "FeatureCollection", features: buildings },
+        footprints: { type: "FeatureCollection", features: footprints },
+        labels: { type: "FeatureCollection", features: labels }
+      };
+    }
+
+    function setCommunityAnno(footprints, labels) {
+      if (map.getSource("community-footprints")) {
+        map.getSource("community-footprints").setData(footprints || { type: "FeatureCollection", features: [] });
+      }
+      // labels 仍写入，供后续扩展；名称以 HTML marker 显示（中文更稳）
+      if (map.getSource("community-labels")) {
+        map.getSource("community-labels").setData(labels || { type: "FeatureCollection", features: [] });
+      }
+    }
+
+    async function loadDistrictBuildings(district, focusCommunity) {
+      if (!district) return;
+      ensureBuildingLayers();
+      const token = ++loadToken;
+      setBuildingsVisible(true);
+      setStatus(`${district.name} 楼栋绘制中…`);
+
+      const cacheKey = focusCommunity
+        ? `${district.name}::${focusCommunity.name}`
+        : district.name;
+
+      if (buildingsByDistrict[cacheKey]) {
+        if (token !== loadToken) return;
+        const cached = buildingsByDistrict[cacheKey];
+        map.getSource("buildings").setData(cached.buildings);
+        setCommunityAnno(cached.footprints, cached.labels);
+        updateStats(cached.buildings.features);
+        showAreaCommunityMarkers(district);
+        renderCommunityList(district);
+        if (activeCommunityName) highlightAreaMarkers(activeCommunityName);
+        setStatus(`${district.name} · ${cached.buildings.features.length} 栋`);
+        return;
+      }
+
+      // 金江路样板全区：本地轮廓 + Demo 标注地块
+      if (district.sample && !focusCommunity) {
+        const local = await loadLocalBuildings();
+        if (token !== loadToken) return;
+        if (local && local.features && local.features.length) {
+          const painted = paintFeatures(local, district);
+          const demo = buildDemoBuildings(district, null);
+          // 建筑用真实轮廓，地块/标注用 demo 形态
+          const cached = {
+            buildings: painted,
+            footprints: demo.footprints,
+            labels: demo.labels
+          };
+          buildingsByDistrict[cacheKey] = cached;
+          map.getSource("buildings").setData(cached.buildings);
+          setCommunityAnno(cached.footprints, cached.labels);
+          updateStats(cached.buildings.features);
+          showAreaCommunityMarkers(district);
+          renderCommunityList(district);
+          setStatus(`${district.name} · 样板 ${cached.buildings.features.length} 栋`);
+          return;
+        }
+      }
+
+      const demo = buildDemoBuildings(district, focusCommunity || null);
+      if (token !== loadToken) return;
+      buildingsByDistrict[cacheKey] = demo;
+      map.getSource("buildings").setData(demo.buildings);
+      setCommunityAnno(demo.footprints, demo.labels);
+      updateStats(demo.buildings.features);
+      showAreaCommunityMarkers(district);
+      renderCommunityList(district);
+      if (activeCommunityName) highlightAreaMarkers(activeCommunityName);
+      const osmN = (district.communities || []).filter((c) => c.countSource === "osm").length;
+      const srcHint = osmN ? `OSM统计 ${osmN} 个小区` : "Demo 栋数";
+      setStatus(`${district.name} · ${demo.buildings.features.length} 栋（${srcHint}）`);
+    }
+
+    function selectDistrict(district, opts = {}) {
+      const { fly = true, keepList = false } = opts;
+      activeDistrict = district;
+      if (!keepList) activeCommunityName = null;
+
+      document.querySelectorAll("#districts button").forEach((b) => {
+        b.classList.toggle("active", b.dataset.name === district.name);
+      });
+
+      // 同步填栋数并立刻展开，不阻塞点击
+      ensureCommunityCounts(district);
+      renderCommunityList(district);
+      showAreaCommunityMarkers(district);
+      setMode(`${district.name} · 小区+栋数`);
+      loadDistrictBuildings(district);
+      if (isMobileLayout()) setPanelExpanded(true);
+
+      if (fly) {
+        const bbox = communityBBox(district, 0.008);
+        map.fitBounds(
+          [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+          {
+            padding: 60,
+            duration: 900,
+            pitch: district.sample ? 55 : 48,
+            maxZoom: district.sample ? 16.6 : 15.6
+          }
+        );
+        const withCount = (district.communities || []).filter((c) => Number(c.count) > 0).length;
+        popup
+          .setLngLat(district.center)
+          .setHTML(
+            `<div class="popup-community" style="color:${district.color}">${district.name}</div>` +
+            `<div class="popup-meta">已标注 ${withCount} 个小区栋数 · 地图显示「名称 + N栋」</div>`
+          )
+          .addTo(map);
+      }
+    }
+
+    function renderSearchResults(list) {
+      const box = document.getElementById("community-results");
+      if (!list.length) {
+        box.innerHTML = `<div class="search-empty">没有匹配</div>`;
+        box.classList.add("show");
+        return;
+      }
+      box.innerHTML = list.map((f, i) => {
+        const name = f.properties.community;
+        let tag = "小区";
+        if (f.properties.kind === "district") tag = f.properties.sample ? "样板" : "区县";
+        else if (f.properties.kind === "street") tag = "街道";
+        else if (f.properties.district) tag = f.properties.district;
+        return `<button type="button" data-i="${i}"><b>${name}</b><span>${tag}</span></button>`;
+      }).join("");
+      box.classList.add("show");
+      box.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const f = list[Number(btn.dataset.i)];
+          focusPlace(f);
+          document.getElementById("community-search").value = f.properties.community;
+          box.classList.remove("show");
+        });
+      });
+    }
+
+    function runSearch() {
+      const input = document.getElementById("community-search");
+      const box = document.getElementById("community-results");
+      const q = normalizeName(input.value.trim());
+      if (!q) {
+        box.classList.remove("show");
+        box.innerHTML = "";
+        return;
+      }
+      const hits = searchIndex().features.filter((f) =>
+        normalizeName(f.properties.community).includes(q) ||
+        normalizeName(f.properties.district || "").includes(q)
+      );
+      renderSearchResults(hits);
+    }
+
+    function bindSearch() {
+      const input = document.getElementById("community-search");
+      const box = document.getElementById("community-results");
+      input.addEventListener("input", runSearch);
+      input.addEventListener("focus", runSearch);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const first = box.querySelector("button");
+          if (first) first.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        }
+        if (e.key === "Escape") box.classList.remove("show");
+      });
+      document.addEventListener("mousedown", (e) => {
+        if (!e.target.closest(".search-box")) box.classList.remove("show");
+      });
+    }
+
+    function renderDistrictButtons() {
+      const wrap = document.getElementById("districts");
+      wrap.innerHTML = DISTRICTS.map((d) =>
+        `<button type="button" data-name="${d.name}" style="border-color:${d.color}88;box-shadow:inset 0 0 0 1px ${d.color}33">` +
+        `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${d.color};margin-right:5px;"></span>${d.name}</button>`
+      ).join("");
+      wrap.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const d = DISTRICTS.find((x) => x.name === btn.dataset.name);
+          if (d) selectDistrict(d, { fly: true });
+        });
+      });
+    }
+
+    function addDistrictMarkers() {
+      districtMarkers.forEach((m) => m.remove());
+      districtMarkers.length = 0;
+      DISTRICTS.filter((d) => !d.sample).forEach((d) => {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "district-marker";
+        el.textContent = d.name;
+        el.style.borderColor = d.color;
+        el.style.color = d.color;
+        el.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          selectDistrict(d, { fly: true });
+        });
+        districtMarkers.push(
+          new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat(d.center).addTo(map)
+        );
+      });
+    }
+
+    function syncDistrictVisibility() {
+      const show = map.getZoom() < BUILDING_MIN_ZOOM;
+      districtMarkers.forEach((m) => {
+        m.getElement().style.display = show ? "" : "none";
+      });
+    }
+
+    function switchBasemap(name) {
+      const cfg = BASEMAP_TILES[name];
+      if (!cfg || !map.getSource("basemap")) return;
+      currentBasemap = name;
+      if (map.getLayer("basemap")) map.removeLayer("basemap");
+      map.removeSource("basemap");
+      map.addSource("basemap", {
+        type: "raster",
+        tiles: cfg.tiles,
+        tileSize: 256,
+        attribution: cfg.attribution,
+        // 高德/Carto 路网一般到 18 级
+        maxzoom: 18
+      });
+      // 始终插到最底层（建筑/地块之下）
+      const beforeId =
+        map.getLayer("community-footprint-fill") ? "community-footprint-fill" :
+        map.getLayer("buildings-3d") ? "buildings-3d" :
+        undefined;
+      map.addLayer({ id: "basemap", type: "raster", source: "basemap", paint: cfg.paint }, beforeId);
+      setStatus(`底图：${name === "satellite" ? "卫星" : name === "dark" ? "深色" : "浅色"}`);
+    }
+
+    function clearSelection() {
+      if (selectedId != null && map.getSource("buildings")) {
+        try { map.setFeatureState({ source: "buildings", id: selectedId }, { selected: false }); } catch (_) {}
+      }
+      selectedId = null;
+      document.getElementById("picked").textContent = "点击建筑";
+    }
+
+    function showBuildingPopup(feature, lngLat) {
+      const props = feature.properties || {};
+      const id = props.id;
+      const community = props.community || "未命名";
+      const buildingName = props.name || "楼栋";
+      const height = props.height != null ? Number(props.height).toFixed(1) : "—";
+      const levels = props.levels != null ? Number(props.levels).toFixed(1) : "—";
+      clearSelection();
+      if (id != null) {
+        selectedId = id;
+        try { map.setFeatureState({ source: "buildings", id }, { selected: true }); } catch (_) {}
+      }
+      document.getElementById("picked").textContent = community;
+      popup
+        .setLngLat(lngLat)
+        .setHTML(
+          `<div class="popup-community">${community}</div>` +
+          `<div class="popup-meta">${props.district ? props.district + " · " : ""}楼栋：${buildingName}<br/>高度：${height} m · 约 ${levels} 层</div>`
+        )
+        .addTo(map);
+    }
+
+    function ensureBuildingLayers() {
+      if (map.getSource("buildings")) return;
+
+      map.addSource("community-footprints", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] }
+      });
+      map.addSource("community-labels", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] }
+      });
+      map.addSource("buildings", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+        promoteId: "id"
+      });
+
+      // 小区大致地块形态（底层）
+      map.addLayer({
+        id: "community-footprint-fill",
+        type: "fill",
+        source: "community-footprints",
+        paint: {
+          "fill-color": ["coalesce", ["get", "color"], BUILDING_COLOR],
+          "fill-opacity": 0.14
+        }
+      });
+      map.addLayer({
+        id: "community-footprint-line",
+        type: "line",
+        source: "community-footprints",
+        filter: ["!=", ["get", "placeType"], "street"],
+        paint: {
+          "line-color": ["coalesce", ["get", "color"], BUILDING_COLOR],
+          "line-width": 2.1,
+          "line-opacity": 0.85
+        }
+      });
+      map.addLayer({
+        id: "community-footprint-dash",
+        type: "line",
+        source: "community-footprints",
+        filter: ["==", ["get", "placeType"], "street"],
+        paint: {
+          "line-color": ["coalesce", ["get", "color"], BUILDING_COLOR],
+          "line-width": 1.25,
+          "line-opacity": 0.9,
+          "line-dasharray": [2, 1.4]
+        }
+      });
+
+      map.addLayer({
+        id: "buildings-3d",
+        type: "fill-extrusion",
+        source: "buildings",
+        paint: {
+          "fill-extrusion-color": [
+            "case",
+            ["boolean", ["feature-state", "selected"], false],
+            BUILDING_SELECTED,
+            ["coalesce", ["get", "color"], BUILDING_COLOR]
+          ],
+          "fill-extrusion-height": ["coalesce", ["get", "height"], 10],
+          "fill-extrusion-base": 0,
+          "fill-extrusion-opacity": BUILDING_OPACITY,
+          "fill-extrusion-vertical-gradient": false
+        }
+      });
+      map.addLayer({
+        id: "buildings-outline",
+        type: "line",
+        source: "buildings",
+        paint: {
+          "line-color": ["coalesce", ["get", "color"], BUILDING_EDGE],
+          "line-width": 1.15,
+          "line-opacity": 0.9
+        }
+      });
+
+      // 小区名称标注（中文依赖字体；与 HTML marker 双保险，默认略透明）
+      map.addLayer({
+        id: "community-labels",
+        type: "symbol",
+        source: "community-labels",
+        layout: {
+          "text-field": ["get", "name"],
+          "text-size": [
+            "match",
+            ["get", "placeType"],
+            "street", 11,
+            13
+          ],
+          "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+          "text-anchor": "top",
+          "text-offset": [0, 0.9],
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+          "visibility": "none"
+        },
+        paint: {
+          "text-color": "#f4fbff",
+          "text-halo-color": [
+            "coalesce",
+            ["get", "color"],
+            "#0b1a24"
+          ],
+          "text-halo-width": 1.6,
+          "text-halo-blur": 0.4,
+          "text-opacity": 0.96
+        }
+      });
+    }
+
+    function setBuildingsVisible(visible) {
+      if (!map.getLayer("buildings-3d")) return;
+      const v = visible ? "visible" : "none";
+      [
+        "community-footprint-fill",
+        "community-footprint-line",
+        "community-footprint-dash",
+        "buildings-3d",
+        "buildings-outline"
+      ].forEach((id) => {
+        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", v);
+      });
+    }
+
+    function osmToGeoJSON(osm) {
+      const nodes = {};
+      for (const el of osm.elements || []) {
+        if (el.type === "node") nodes[el.id] = [el.lon, el.lat];
+      }
+      const features = [];
+      for (const el of osm.elements || []) {
+        if (el.type !== "way" || !el.nodes || !el.tags || !el.tags.building) continue;
+        const coords = el.nodes.map((n) => nodes[n]).filter(Boolean);
+        if (coords.length < 3) continue;
+        const first = coords[0];
+        const last = coords[coords.length - 1];
+        if (first[0] !== last[0] || first[1] !== last[1]) coords.push(first.slice());
+        const tags = el.tags;
+        const levelsRaw = parseFloat(tags["building:levels"] || tags.levels || "");
+        const heightRaw = parseFloat(String(tags.height || "").replace("m", ""));
+        const levels = Number.isFinite(levelsRaw) ? levelsRaw : (Number.isFinite(heightRaw) ? heightRaw / LEVEL_HEIGHT : 4);
+        const height = Number.isFinite(heightRaw) ? heightRaw : levels * LEVEL_HEIGHT;
+        features.push({
+          type: "Feature",
+          properties: {
+            id: el.id,
+            name: tags.name || "楼栋",
+            community: tags["addr:neighbourhood"] || tags["addr:suburb"] || tags["addr:district"] || "OSM建筑",
+            height: Math.max(6, Math.min(height, 280)),
+            levels: Math.max(1, levels),
+            building: tags.building
+          },
+          geometry: { type: "Polygon", coordinates: [coords] }
+        });
+        if (features.length >= MAX_WAYS) break;
+      }
+      return { type: "FeatureCollection", features };
+    }
+
+    async function fetchOverpass(bbox) {
+      const [west, south, east, north] = bbox;
+      const query =
+        `[out:json][timeout:40];` +
+        `way["building"](${south},${west},${north},${east});` +
+        `out body ${MAX_WAYS};` +
+        `>;out skel qt;`;
+      let lastErr = null;
+      for (const url of OVERPASS_ENDPOINTS) {
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+            body: "data=" + encodeURIComponent(query)
+          });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return await res.json();
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      throw lastErr || new Error("Overpass failed");
+    }
+
+    function bboxOverlapsSample(bbox) {
+      const [west, south, east, north] = bbox;
+      const sw = [102.7128, 25.0678];
+      const ne = [102.7261, 25.0781];
+      return !(east < sw[0] || west > ne[0] || north < sw[1] || south > ne[1]);
+    }
+
+    async function loadLocalBuildings() {
+      if (localBuildings) return localBuildings;
+      try {
+        const res = await fetch("./buildings.geojson?v=4");
+        if (res.ok) localBuildings = await res.json();
+      } catch (_) {}
+      return localBuildings;
+    }
+
+    async function refreshBuildings() {
+      const zoom = map.getZoom();
+      syncDistrictVisibility();
+
+      // 已选区县时，由 loadDistrictBuildings 负责，避免被视窗刷新冲掉配色
+      if (activeDistrict) {
+        setMode(`${activeDistrict.name} · 分区配色`);
+        return;
+      }
+
+      if (zoom < BUILDING_MIN_ZOOM) {
+        setMode("全市总览");
+        setStatus("点击区县展开小区并加载同色建筑");
+        setBuildingsVisible(false);
+        setCommunityAnno(null, null);
+        updateStats([]);
+        return;
+      }
+
+      setMode("街区建筑");
+      setBuildingsVisible(true);
+      const b = map.getBounds();
+      const west = b.getWest();
+      const south = b.getSouth();
+      const east = b.getEast();
+      const north = b.getNorth();
+      const token = ++loadToken;
+      setStatus("加载中…");
+
+      if (bboxOverlapsSample([west, south, east, north]) && zoom >= 15.5) {
+        const local = await loadLocalBuildings();
+        if (token !== loadToken) return;
+        if (local && local.features && local.features.length) {
+          const sample = DISTRICTS.find((d) => d.sample);
+          const painted = paintFeatures(local, sample || { name: "样板", color: BUILDING_COLOR });
+          map.getSource("buildings").setData(painted);
+          updateStats(painted.features);
+          setStatus("样板数据（本地）");
+          return;
+        }
+      }
+
+      try {
+        const osm = await fetchOverpass([west, south, east, north]);
+        if (token !== loadToken) return;
+        const geo = osmToGeoJSON(osm);
+        // 未选区时用默认色
+        const painted = paintFeatures(geo, { name: "视窗", color: BUILDING_COLOR });
+        map.getSource("buildings").setData(painted);
+        updateStats(painted.features);
+        setStatus(geo.features.length ? `OSM 动态 ${geo.features.length} 栋` : "此视窗暂无建筑");
+      } catch (err) {
+        if (token !== loadToken) return;
+        setStatus("加载失败，稍后重试");
+        console.warn(err);
+      }
+    }
+
+    function scheduleRefresh() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(refreshBuildings, 450);
+    }
+
+    function bindBuildingEvents() {
+      if (eventsBound) return;
+      eventsBound = true;
+      map.on("mousemove", (e) => {
+        if (!map.getLayer("buildings-3d") || map.getLayoutProperty("buildings-3d", "visibility") === "none") {
+          map.getCanvas().style.cursor = "";
+          return;
+        }
+        const hits = map.queryRenderedFeatures(e.point, { layers: ["buildings-3d"] });
+        map.getCanvas().style.cursor = hits.length ? "pointer" : "";
+      });
+      map.on("click", (e) => {
+        if (!map.getLayer("buildings-3d") || map.getLayoutProperty("buildings-3d", "visibility") === "none") return;
+        const hits = map.queryRenderedFeatures(e.point, { layers: ["buildings-3d"] });
+        if (hits.length) showBuildingPopup(hits[0], e.lngLat);
+        else {
+          clearSelection();
+          popup.remove();
+          if (isMobileLayout()) setPanelExpanded(false);
+        }
+      });
+    }
+
+    map.on("load", async () => {
+      await hydrateSampleCommunities();
+      ensureBuildingLayers();
+      setBuildingsVisible(false);
+      bindBuildingEvents();
+      renderDistrictButtons();
+      addDistrictMarkers();
+      syncDistrictVisibility();
+      scheduleRefresh();
+    });
+
+    map.on("moveend", () => {
+      scheduleRefresh();
+    });
+
+    map.on("zoomend", () => {
+      syncDistrictVisibility();
+    });
+
+    document.querySelectorAll(".basemap button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".basemap button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        switchBasemap(btn.dataset.style);
+      });
+    });
+
+    bindPanelUi();
+    bindSearch();
+  </script>
+</body>
+</html>
