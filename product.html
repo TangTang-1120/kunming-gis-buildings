@@ -597,6 +597,7 @@
 
     <nav class="tabs" id="tabs" aria-label="分类筛选">
       <button class="tab active" type="button" data-cat="all">全部<span class="n"></span></button>
+      <button class="tab" type="button" data-cat="fav">书签栏<span class="n"></span></button>
       <button class="tab" type="button" data-cat="search">搜索<span class="n"></span></button>
       <button class="tab" type="button" data-cat="model">模型<span class="n"></span></button>
       <button class="tab" type="button" data-cat="design">设计<span class="n"></span></button>
@@ -606,11 +607,16 @@
     </nav>
 
     <div class="hint">
-      <span>点击卡片直接打开站点 · 支持搜索与分类筛选</span>
+      <span>「书签栏」来自你的常用站点 · 点击卡片直接打开</span>
       <span><kbd>/</kbd> 聚焦搜索</span>
     </div>
 
     <div id="catalog">
+      <section class="group" data-cat="fav">
+        <div class="group-title"><span>书签栏常用</span></div>
+        <div class="grid" id="fav-grid"></div>
+      </section>
+
       <section class="group" data-cat="search">
         <div class="group-title"><span>发现与搜索</span></div>
         <div class="grid">
@@ -818,6 +824,52 @@
 
   <script>
     (function () {
+      // 书签栏截图识别出的常用站点（按从左到右）
+      const FAV_BOOKMARKS = [
+        { name: "shadcn/ui", domain: "ui.shadcn.com", url: "https://ui.shadcn.com/", desc: "组件与设计系统" },
+        { name: "飞书", domain: "www.feishu.cn", url: "https://www.feishu.cn/", desc: "协作文档与会议" },
+        { name: "CodePen", domain: "codepen.io", url: "https://codepen.io/", desc: "前端沙盒实验" },
+        { name: "Framer", domain: "www.framer.com", url: "https://www.framer.com/", desc: "设计到上线" },
+        { name: "Supabase", domain: "supabase.com", url: "https://supabase.com/", desc: "后端与数据库" },
+        { name: "Arc", domain: "arc.net", url: "https://arc.net/", desc: "浏览器工作区" },
+        { name: "YouTube", domain: "www.youtube.com", url: "https://www.youtube.com/", desc: "视频教学演示" },
+        { name: "Raycast", domain: "www.raycast.com", url: "https://www.raycast.com/", desc: "启动器与扩展" },
+        { name: "Krea", domain: "www.krea.ai", url: "https://www.krea.ai/", desc: "AI 图像生成" },
+        { name: "Google Sheets", domain: "sheets.google.com", url: "https://sheets.google.com/", desc: "表格协作" },
+        { name: "Logseq", domain: "logseq.com", url: "https://logseq.com/", desc: "本地知识笔记" },
+        { name: "Giphy", domain: "giphy.com", url: "https://giphy.com/", desc: "动图素材" },
+        { name: "Obsidian", domain: "obsidian.md", url: "https://obsidian.md/", desc: "双向链接笔记" },
+        { name: "Analytics", domain: "analytics.google.com", url: "https://analytics.google.com/", desc: "网站流量分析" },
+        { name: "Panda CSS", domain: "panda-css.com", url: "https://panda-css.com/", desc: "CSS-in-JS 方案" },
+        { name: "Remix", domain: "remix.run", url: "https://remix.run/", desc: "全栈 Web 框架" },
+        { name: "Vite", domain: "vitejs.dev", url: "https://vitejs.dev/", desc: "前端构建工具" },
+        { name: "Slack", domain: "slack.com", url: "https://slack.com/", desc: "团队即时沟通" },
+        { name: "Midjourney", domain: "www.midjourney.com", url: "https://www.midjourney.com/", desc: "AI 图像创作" },
+        { name: "Loom", domain: "www.loom.com", url: "https://www.loom.com/", desc: "屏幕录制分享" },
+        { name: "Banana", domain: "www.banana.dev", url: "https://www.banana.dev/", desc: "模型推理托管" },
+        { name: "Copilot", domain: "copilot.microsoft.com", url: "https://copilot.microsoft.com/", desc: "微软 AI 助手" },
+        { name: "Figma", domain: "www.figma.com", url: "https://www.figma.com/", desc: "界面设计协作" },
+        { name: "iCloud", domain: "www.icloud.com", url: "https://www.icloud.com/", desc: "云盘与备忘录" },
+        { name: "CodeSandbox", domain: "codesandbox.io", url: "https://codesandbox.io/", desc: "在线编码沙盒" },
+        { name: "Firebase", domain: "firebase.google.com", url: "https://firebase.google.com/", desc: "后端与托管" },
+        { name: "Vercel", domain: "vercel.com", url: "https://vercel.com/", desc: "前端部署上线" },
+        { name: "Google", domain: "www.google.com", url: "https://www.google.com/", desc: "通用搜索" },
+        { name: "Gmail", domain: "mail.google.com", url: "https://mail.google.com/", desc: "邮箱" },
+        { name: "ChatGPT", domain: "chatgpt.com", url: "https://chatgpt.com/", desc: "对话与写作" },
+        { name: "知乎", domain: "www.zhihu.com", url: "https://www.zhihu.com/", desc: "中文问答经验" }
+      ];
+
+      const favGrid = document.getElementById("fav-grid");
+      if (favGrid) {
+        favGrid.innerHTML = FAV_BOOKMARKS.map((b) => (
+          `<a class="card" data-cat="fav" data-name="${b.name.toLowerCase()}" href="${b.url}" target="_blank" rel="noopener">` +
+          `<div class="icon"><img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(b.domain)}&sz=64" alt="" loading="lazy" /></div>` +
+          `<div class="meta"><h3>${b.name}</h3><p>${b.desc}</p></div>` +
+          `<span class="open">开</span>` +
+          `</a>`
+        )).join("");
+      }
+
       const q = document.getElementById("q");
       const clearBtn = document.getElementById("clear");
       const empty = document.getElementById("empty");
@@ -847,7 +899,7 @@
 
         cards.forEach((card) => {
           const inCat = cat === "all" || card.dataset.cat === cat;
-          const name = ((card.dataset.name || "") + " " + (card.querySelector("h3")?.textContent || "")).toLowerCase();
+          const name = ((card.dataset.name || "") + " " + (card.querySelector("h3")?.textContent || "") + " " + (card.querySelector("p")?.textContent || "")).toLowerCase();
           const hit = !keyword || name.includes(keyword);
           const show = inCat && hit;
           card.classList.toggle("hidden", !show);
@@ -890,7 +942,6 @@
         }
       });
 
-      // Banner CTA：滚到搜索并聚焦
       document.querySelector('.banner-actions .primary')?.addEventListener("click", (e) => {
         e.preventDefault();
         q.focus();
