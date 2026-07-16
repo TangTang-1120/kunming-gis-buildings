@@ -152,9 +152,9 @@
         );
       -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
       mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
-      filter: drop-shadow(0 0 12px rgba(100, 180, 255, 0.18));
+      filter: none;
       animation: orbit-spin 32s linear infinite reverse;
-      opacity: 0.85;
+      opacity: 0.75;
     }
 
     .page-fx .orbit-2::before {
@@ -299,36 +299,94 @@
       z-index: 2;
       justify-self: end;
       width: min(380px, 100%);
+      perspective: 1000px;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .banner-art-hint {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      opacity: 0.85;
     }
 
     .banner-art-card {
       position: relative;
       width: 100%;
-      border-radius: 8px;
-      transition: transform 0.25s ease;
-      /* 用轻量阴影代替 filter:drop-shadow，避免合成层卡顿 */
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      border-radius: 12px;
+      transform-style: preserve-3d;
+      transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(var(--sc, 1));
+      transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
+      cursor: grab;
     }
 
-    .banner-art-card:hover {
-      transform: translateY(-4px) rotate(-1.5deg);
+    .banner-art.is-dragging .banner-art-card {
+      transition: none;
+      cursor: grabbing;
+      box-shadow: 0 22px 48px rgba(0, 0, 0, 0.5);
     }
 
-    .banner-art-card img,
-    .banner-art-card picture {
+    .banner-art-card.is-flipped {
+      transform: rotateX(var(--rx, 0deg)) rotateY(calc(var(--ry, 0deg) + 180deg)) scale(var(--sc, 1));
+    }
+
+    .banner-art-face {
+      width: 100%;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border-radius: inherit;
+      overflow: hidden;
+    }
+
+    .banner-art-face img,
+    .banner-art-face picture {
       width: 100%;
       height: auto;
       display: block;
-      border-radius: inherit;
+      pointer-events: none;
       user-select: none;
       -webkit-user-drag: none;
-      /* 提示浏览器异步解码，减少主线程卡顿 */
-      content-visibility: auto;
+    }
+
+    .banner-art-back {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      text-align: center;
+      border-radius: inherit;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(62, 207, 190, 0.28), transparent 55%),
+        radial-gradient(circle at 70% 75%, rgba(100, 180, 255, 0.18), transparent 50%),
+        linear-gradient(160deg, #152028, #0d1319 60%, #121a22);
+      border: 1px solid rgba(62, 207, 190, 0.35);
+      transform: rotateY(180deg);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      box-sizing: border-box;
+    }
+
+    .banner-art-back strong {
+      display: block;
+      font-size: 20px;
+      margin-bottom: 8px;
+      color: var(--accent);
+    }
+
+    .banner-art-back p {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .banner-art-card,
-      .banner-art-card:hover { transition: none; transform: none; }
+      .banner-art-card { transition: none; }
     }
 
     /* 嵌入进行中的 GIS */
@@ -888,21 +946,31 @@
           <a class="ghost" href="#gis">查看进行中的 GIS</a>
         </div>
       </div>
-      <div class="banner-art" id="banner-art">
-        <div class="banner-art-card">
-          <picture>
-            <source srcset="assets/banner-mascot.webp" type="image/webp" />
-            <img
-              src="assets/banner-mascot.jpg"
-              alt="TangTang"
-              width="640"
-              height="640"
-              decoding="async"
-              loading="eager"
-              fetchpriority="high"
-            />
-          </picture>
+      <div class="banner-art" id="banner-art" title="拖拽旋转，双击翻转">
+        <div class="banner-art-card" id="banner-art-card">
+          <div class="banner-art-face">
+            <picture>
+              <source srcset="assets/banner-mascot.webp" type="image/webp" />
+              <img
+                src="assets/banner-mascot.jpg"
+                alt="TangTang"
+                width="640"
+                height="603"
+                decoding="async"
+                loading="eager"
+                fetchpriority="high"
+                draggable="false"
+              />
+            </picture>
+          </div>
+          <div class="banner-art-back" aria-hidden="true">
+            <div>
+              <strong>TangTang</strong>
+              <p>拖拽旋转卡片<br />双击翻转回来<br />玩转你的书签宇宙</p>
+            </div>
+          </div>
         </div>
+        <div class="banner-art-hint">拖拽旋转 · 双击翻转</div>
       </div>
     </div>
   </section>
@@ -1447,7 +1515,130 @@
         q.scrollIntoView({ behavior: "smooth", block: "center" });
       });
 
-      // Banner 轻量悬停（去掉实时 3D 跟踪，避免卡顿）
+      // Banner 可玩转卡片：拖拽旋转 + 双击翻转（轻量 transform）
+      (function initPlayableCard() {
+        const stage = document.getElementById("banner-art");
+        const card = document.getElementById("banner-art-card");
+        if (!stage || !card) return;
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        let rx = 6;
+        let ry = -10;
+        let sc = 1;
+        let flipped = false;
+        let dragging = false;
+        let moved = false;
+        let startX = 0;
+        let startY = 0;
+        let baseRx = 0;
+        let baseRy = 0;
+        let raf = 0;
+        let lastT = 0;
+        let velX = 0;
+        let velY = 0;
+
+        function paint() {
+          raf = 0;
+          card.style.setProperty("--rx", rx.toFixed(2) + "deg");
+          card.style.setProperty("--ry", ry.toFixed(2) + "deg");
+          card.style.setProperty("--sc", sc.toFixed(3));
+          card.classList.toggle("is-flipped", flipped);
+        }
+
+        function requestPaint() {
+          if (!raf) raf = requestAnimationFrame(paint);
+        }
+
+        // 初始轻微倾角
+        if (!reduce) requestPaint();
+        else {
+          rx = 0; ry = 0; paint();
+        }
+
+        function onPointerDown(e) {
+          if (e.button != null && e.button !== 0) return;
+          dragging = true;
+          moved = false;
+          stage.classList.add("is-dragging");
+          startX = e.clientX;
+          startY = e.clientY;
+          baseRx = rx;
+          baseRy = ry;
+          velX = 0;
+          velY = 0;
+          lastT = performance.now();
+          sc = 1.04;
+          stage.setPointerCapture?.(e.pointerId);
+          requestPaint();
+          e.preventDefault();
+        }
+
+        function onPointerMove(e) {
+          if (!dragging) return;
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
+          const now = performance.now();
+          const dt = Math.max(8, now - lastT);
+          const nextRy = baseRy + dx * 0.28;
+          const nextRx = Math.max(-24, Math.min(24, baseRx - dy * 0.22));
+          velX = (nextRy - ry) / dt;
+          velY = (nextRx - rx) / dt;
+          ry = nextRy;
+          rx = nextRx;
+          lastT = now;
+          requestPaint();
+        }
+
+        function settle() {
+          if (reduce) {
+            rx = 0; ry = 0; sc = 1; requestPaint(); return;
+          }
+          // 惯性一点点后回弹到轻倾角
+          let frames = 0;
+          function tick() {
+            frames += 1;
+            ry += velX * 14;
+            rx = Math.max(-28, Math.min(28, rx + velY * 14));
+            velX *= 0.86;
+            velY *= 0.86;
+            // 缓慢回到默认姿态
+            rx += (6 - rx) * 0.08;
+            ry += (-10 - ry) * 0.08;
+            sc += (1 - sc) * 0.12;
+            requestPaint();
+            if (frames < 28 && (Math.abs(velX) + Math.abs(velY) > 0.002 || Math.abs(rx - 6) > 0.4 || Math.abs(ry + 10) > 0.4)) {
+              requestAnimationFrame(tick);
+            } else {
+              rx = 6; ry = -10; sc = 1; requestPaint();
+            }
+          }
+          requestAnimationFrame(tick);
+        }
+
+        function onPointerUp(e) {
+          if (!dragging) return;
+          dragging = false;
+          stage.classList.remove("is-dragging");
+          try { stage.releasePointerCapture?.(e.pointerId); } catch (_) {}
+          settle();
+        }
+
+        function onDblClick(e) {
+          e.preventDefault();
+          if (moved && dragging) return;
+          flipped = !flipped;
+          card.classList.toggle("is-flipped", flipped);
+          requestPaint();
+        }
+
+        stage.addEventListener("pointerdown", onPointerDown);
+        stage.addEventListener("pointermove", onPointerMove);
+        stage.addEventListener("pointerup", onPointerUp);
+        stage.addEventListener("pointercancel", onPointerUp);
+        stage.addEventListener("dblclick", onDblClick);
+      })();
+
       // 书签卡片跟随光感
       (function initCardLights() {
         const root = document.getElementById("catalog");
