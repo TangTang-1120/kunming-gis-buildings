@@ -95,7 +95,8 @@
         );
       -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
       mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
-      filter: drop-shadow(0 0 10px rgba(62, 207, 190, 0.25));
+      filter: none;
+      opacity: 0.9;
       animation: orbit-spin 22s linear infinite;
       transform-origin: center;
     }
@@ -297,45 +298,37 @@
       position: relative;
       z-index: 2;
       justify-self: end;
-      width: min(420px, 100%);
-      perspective: 900px;
-      --rx: 0deg;
-      --ry: 0deg;
-      --glow-x: 50%;
-      --glow-y: 40%;
+      width: min(380px, 100%);
     }
 
     .banner-art-card {
       position: relative;
       width: 100%;
-      background: transparent;
-      transform-style: preserve-3d;
-      transform: rotateX(var(--rx)) rotateY(var(--ry));
-      transition: transform 0.12s ease-out, filter 0.25s ease;
-      will-change: transform;
-      filter: drop-shadow(0 0 18px rgba(56, 200, 255, 0.18));
-      overflow: visible;
+      border-radius: 8px;
+      transition: transform 0.25s ease;
+      /* 用轻量阴影代替 filter:drop-shadow，避免合成层卡顿 */
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
     }
 
-    .banner-art-card:hover,
-    .banner-art.is-tilting .banner-art-card {
-      filter: drop-shadow(0 0 28px rgba(56, 200, 255, 0.32)) drop-shadow(0 12px 28px rgba(0, 0, 0, 0.35));
+    .banner-art-card:hover {
+      transform: translateY(-4px) rotate(-1.5deg);
     }
 
-    .banner-art-card img {
+    .banner-art-card img,
+    .banner-art-card picture {
       width: 100%;
       height: auto;
       display: block;
-      object-fit: contain;
-      object-position: center;
-      background: transparent;
-      transform: translateZ(18px);
+      border-radius: inherit;
       user-select: none;
       -webkit-user-drag: none;
+      /* 提示浏览器异步解码，减少主线程卡顿 */
+      content-visibility: auto;
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .banner-art-card { transition: none; }
+      .banner-art-card,
+      .banner-art-card:hover { transition: none; transform: none; }
     }
 
     /* 嵌入进行中的 GIS */
@@ -897,7 +890,18 @@
       </div>
       <div class="banner-art" id="banner-art">
         <div class="banner-art-card">
-          <img src="assets/banner-mascot.png" alt="TangTang" width="800" height="800" decoding="async" fetchpriority="high" />
+          <picture>
+            <source srcset="assets/banner-mascot.webp" type="image/webp" />
+            <img
+              src="assets/banner-mascot.jpg"
+              alt="TangTang"
+              width="640"
+              height="640"
+              decoding="async"
+              loading="eager"
+              fetchpriority="high"
+            />
+          </picture>
         </div>
       </div>
     </div>
@@ -1443,50 +1447,7 @@
         q.scrollIntoView({ behavior: "smooth", block: "center" });
       });
 
-      // Banner 3D 卡片倾斜交互
-      (function initBannerCard3D() {
-        const art = document.getElementById("banner-art");
-        if (!art) return;
-        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        if (reduce) return;
-
-        const maxTilt = 12;
-        let raf = 0;
-        let targetX = 0;
-        let targetY = 0;
-
-        function paint() {
-          raf = 0;
-          art.style.setProperty("--rx", (-targetY * maxTilt) + "deg");
-          art.style.setProperty("--ry", (targetX * maxTilt) + "deg");
-        }
-
-        function onMove(e) {
-          const rect = art.getBoundingClientRect();
-          const x = (e.clientX - rect.left) / rect.width;
-          const y = (e.clientY - rect.top) / rect.height;
-          targetX = Math.max(-1, Math.min(1, (x - 0.5) * 2));
-          targetY = Math.max(-1, Math.min(1, (y - 0.5) * 2));
-          art.style.setProperty("--glow-x", (x * 100) + "%");
-          art.style.setProperty("--glow-y", (y * 100) + "%");
-          art.classList.add("is-tilting");
-          if (!raf) raf = requestAnimationFrame(paint);
-        }
-
-        function reset() {
-          targetX = 0;
-          targetY = 0;
-          art.classList.remove("is-tilting");
-          art.style.setProperty("--glow-x", "50%");
-          art.style.setProperty("--glow-y", "40%");
-          if (!raf) raf = requestAnimationFrame(paint);
-        }
-
-        art.addEventListener("pointermove", onMove);
-        art.addEventListener("pointerleave", reset);
-        art.addEventListener("pointercancel", reset);
-      })();
-
+      // Banner 轻量悬停（去掉实时 3D 跟踪，避免卡顿）
       // 书签卡片跟随光感
       (function initCardLights() {
         const root = document.getElementById("catalog");
