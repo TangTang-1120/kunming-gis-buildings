@@ -195,24 +195,78 @@
       position: relative;
       z-index: 2;
       justify-self: end;
-      width: min(420px, 100%);
-      max-width: 420px;
-      aspect-ratio: 647 / 680;
-      pointer-events: none;
+      width: min(360px, 100%);
+      max-width: 360px;
+      aspect-ratio: 640 / 591;
+      perspective: 900px;
+      --rx: 0deg;
+      --ry: 0deg;
+      --glow-x: 50%;
+      --glow-y: 40%;
     }
 
-    .banner-art img {
+    .banner-art-card {
+      position: relative;
       width: 100%;
       height: 100%;
-      object-fit: contain;
-      display: block;
-      filter: drop-shadow(0 0 18px rgba(56, 200, 255, 0.25));
-      animation: mascot-float 5.5s ease-in-out infinite;
+      border-radius: 18px;
+      transform-style: preserve-3d;
+      transform: rotateX(var(--rx)) rotateY(var(--ry));
+      transition: transform 0.12s ease-out, box-shadow 0.25s ease;
+      box-shadow:
+        0 18px 40px rgba(0, 0, 0, 0.45),
+        0 0 0 1px rgba(56, 200, 255, 0.18),
+        0 0 28px rgba(56, 200, 255, 0.16);
+      overflow: hidden;
+      background: #05080c;
+      will-change: transform;
     }
 
-    @keyframes mascot-float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-8px); }
+    .banner-art-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      border-radius: inherit;
+      transform: translateZ(18px);
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .banner-art-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(
+        circle at var(--glow-x) var(--glow-y),
+        rgba(120, 220, 255, 0.28),
+        transparent 42%
+      );
+      mix-blend-mode: screen;
+      opacity: 0.55;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      transform: translateZ(28px);
+    }
+
+    .banner-art:hover .banner-art-card,
+    .banner-art.is-tilting .banner-art-card {
+      box-shadow:
+        0 28px 56px rgba(0, 0, 0, 0.55),
+        0 0 0 1px rgba(56, 200, 255, 0.32),
+        0 0 40px rgba(56, 200, 255, 0.28),
+        0 0 60px rgba(255, 140, 60, 0.12);
+    }
+
+    .banner-art:hover .banner-art-card::after,
+    .banner-art.is-tilting .banner-art-card::after {
+      opacity: 0.9;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .banner-art-card { transition: none; }
+      .banner-art-card::after { display: none; }
     }
 
     /* 嵌入进行中的 GIS */
@@ -625,8 +679,10 @@
           <a class="ghost" href="#gis">查看进行中的 GIS</a>
         </div>
       </div>
-      <div class="banner-art" aria-hidden="true">
-        <img src="assets/banner-mascot.png" alt="TangTang" width="647" height="680" decoding="async" fetchpriority="high" />
+      <div class="banner-art" id="banner-art">
+        <div class="banner-art-card">
+          <img src="assets/banner-mascot.jpg" alt="TangTang" width="640" height="591" decoding="async" fetchpriority="high" />
+        </div>
       </div>
     </div>
   </section>
@@ -1131,6 +1187,50 @@
         q.focus();
         q.scrollIntoView({ behavior: "smooth", block: "center" });
       });
+
+      // Banner 3D 卡片倾斜交互
+      (function initBannerCard3D() {
+        const art = document.getElementById("banner-art");
+        if (!art) return;
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (reduce) return;
+
+        const maxTilt = 12;
+        let raf = 0;
+        let targetX = 0;
+        let targetY = 0;
+
+        function paint() {
+          raf = 0;
+          art.style.setProperty("--rx", (-targetY * maxTilt) + "deg");
+          art.style.setProperty("--ry", (targetX * maxTilt) + "deg");
+        }
+
+        function onMove(e) {
+          const rect = art.getBoundingClientRect();
+          const x = (e.clientX - rect.left) / rect.width;
+          const y = (e.clientY - rect.top) / rect.height;
+          targetX = Math.max(-1, Math.min(1, (x - 0.5) * 2));
+          targetY = Math.max(-1, Math.min(1, (y - 0.5) * 2));
+          art.style.setProperty("--glow-x", (x * 100) + "%");
+          art.style.setProperty("--glow-y", (y * 100) + "%");
+          art.classList.add("is-tilting");
+          if (!raf) raf = requestAnimationFrame(paint);
+        }
+
+        function reset() {
+          targetX = 0;
+          targetY = 0;
+          art.classList.remove("is-tilting");
+          art.style.setProperty("--glow-x", "50%");
+          art.style.setProperty("--glow-y", "40%");
+          if (!raf) raf = requestAnimationFrame(paint);
+        }
+
+        art.addEventListener("pointermove", onMove);
+        art.addEventListener("pointerleave", reset);
+        art.addEventListener("pointercancel", reset);
+      })();
 
       counts();
       apply();
